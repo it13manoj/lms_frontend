@@ -1,0 +1,31 @@
+.profile-page .profile-card {
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  position: sticky;
+  top: 80px;
+}
+
+.profile-page .profile-avatar {
+  margin-bottom: 15px;
+}
+
+.profile-page .profile-avatar img {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border: 3px solid #e9ecef;
+}
+
+.profile-page .list-group-item {
+  background: transparent;
+  border: none;
+  padding: 8px 0;
+}
+
+@media (max-width: 768px) {
+  .profile-page .profile-card {
+    position: static;
+    margin-bottom: 20px;
+  }
+}

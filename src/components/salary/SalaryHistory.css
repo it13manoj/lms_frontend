@@ -1,0 +1,41 @@
+.salary-history .table td {
+  vertical-align: middle;
+}
+
+.salary-history .table th {
+  background: #f8f9fa;
+  border-bottom: 2px solid #e9ecef;
+  font-weight: 600;
+  color: #495057;
+}
+
+.salary-history .table .badge {
+  padding: 6px 12px;
+  font-weight: 500;
+}
+
+.salary-history .table .btn {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.salary-history .empty-state {
+  padding: 40px 0;
+}
+
+.salary-history .empty-state h5 {
+  color: #6c757d;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .salary-history .table-responsive {
+    margin: 0 -15px;
+  }
+
+  .salary-history .table td,
+  .salary-history .table th {
+    font-size: 13px;
+    padding: 8px;
+  }
+}

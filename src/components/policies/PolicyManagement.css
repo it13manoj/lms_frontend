@@ -1,0 +1,44 @@
+.policy-management .search-wrapper {
+  position: relative;
+}
+
+.policy-management .search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6c757d;
+}
+
+.policy-management .search-wrapper .form-control {
+  padding-left: 35px;
+}
+
+.policy-management .policy-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.policy-management .policy-icon {
+  font-size: 20px;
+  color: #6c757d;
+}
+
+.policy-management .action-buttons {
+  display: flex;
+  gap: 5px;
+}
+
+.policy-management .action-buttons .btn {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.policy-management .empty-state {
+  padding: 40px 0;
+}
+
+.policy-management .empty-state h5 {
+  color: #6c757d;
+}

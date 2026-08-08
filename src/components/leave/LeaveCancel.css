@@ -1,0 +1,184 @@
+.leave-cancel .search-wrapper {
+  position: relative;
+}
+
+.leave-cancel .search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6c757d;
+}
+
+.leave-cancel .search-wrapper .form-control {
+  padding-left: 35px;
+}
+
+.leave-cancel .leave-table td {
+  vertical-align: middle;
+}
+
+.leave-cancel .pending-row {
+  background-color: rgba(255, 193, 7, 0.05) !important;
+}
+
+.leave-cancel .pending-row:hover {
+  background-color: rgba(255, 193, 7, 0.1) !important;
+}
+
+.leave-cancel .employee-info {
+  display: flex;
+  align-items: center;
+}
+
+.leave-cancel .leave-type-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  background: #e9ecef;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.leave-cancel .date-range {
+  display: flex;
+  gap: 20px;
+}
+
+.leave-cancel .date-range > div {
+  min-width: 80px;
+}
+
+.leave-cancel .date-range small {
+  font-size: 11px;
+}
+
+.leave-cancel .days-badge {
+  font-size: 14px;
+  padding: 6px 12px;
+}
+
+.leave-cancel .status-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.leave-cancel .status-info > * {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.leave-cancel .days-remaining {
+  font-size: 11px;
+}
+
+.leave-cancel .cancel-btn {
+  min-width: 90px;
+}
+
+.leave-cancel .disabled-btn {
+  min-width: 90px;
+}
+
+.leave-cancel .empty-state {
+  padding: 40px 0;
+}
+
+.leave-cancel .empty-state h5 {
+  color: #6c757d;
+}
+
+/* Modal Styles */
+.leave-cancel .cancel-summary {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 15px;
+  margin: 15px 0;
+}
+
+.leave-cancel .summary-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.leave-cancel .summary-item:last-child {
+  border-bottom: none;
+}
+
+.leave-cancel .summary-item label {
+  font-size: 14px;
+}
+
+.leave-cancel .summary-item .fw-bold {
+  font-size: 14px;
+}
+
+/* Legend Styles */
+.leave-cancel .legend {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.leave-cancel .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+}
+
+.leave-cancel .legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* Stat Cards */
+.leave-cancel .stat-card {
+  border: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s ease;
+}
+
+.leave-cancel .stat-card:hover {
+  transform: translateY(-3px);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .leave-cancel .date-range {
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .leave-cancel .legend {
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .leave-cancel .stat-card {
+    margin-bottom: 15px;
+  }
+}
+
+/* Animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.leave-cancel .pending-row {
+  animation: fadeInUp 0.3s ease;
+}

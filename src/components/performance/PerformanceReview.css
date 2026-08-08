@@ -1,0 +1,75 @@
+.performance-review .review-meta {
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.performance-review .rating-display {
+  display: flex;
+  align-items: center;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.performance-review .rating-display svg {
+  margin-right: 4px;
+}
+
+.performance-review .rating-value {
+  font-size: 24px;
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+.performance-review .review-section {
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.performance-review .review-section h6 {
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 10px;
+}
+
+.performance-review .review-comment {
+  padding: 10px;
+  background: white;
+  border-radius: 6px;
+  border-left: 3px solid #667eea;
+}
+
+.performance-review .goal-item,
+.performance-review .achievement-item {
+  padding: 8px 12px;
+  background: white;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+}
+
+.performance-review .goal-item:last-child,
+.performance-review .achievement-item:last-child {
+  margin-bottom: 0;
+}
+
+.performance-review .goal-item svg,
+.performance-review .achievement-item svg {
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .performance-review .rating-display {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .performance-review .rating-value {
+    font-size: 20px;
+    margin-top: 8px;
+  }
+}

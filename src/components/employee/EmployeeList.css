@@ -1,0 +1,150 @@
+.employee-list .search-wrapper {
+  position: relative;
+}
+
+.employee-list .search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6c757d;
+}
+
+.employee-list .search-wrapper .form-control {
+  padding-left: 35px;
+}
+
+.employee-list .action-buttons {
+  display: flex;
+  gap: 5px;
+}
+
+.employee-list .action-buttons .btn {
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+.employee-list .action-buttons .btn:hover {
+  transform: scale(1.05);
+}
+
+.employee-list .table td {
+  vertical-align: middle;
+}
+
+.employee-list .table th {
+  background: #f8f9fa;
+  border-bottom: 2px solid #e9ecef;
+  font-weight: 600;
+  color: #495057;
+}
+
+.employee-list .badge {
+  padding: 6px 12px;
+  font-weight: 500;
+}
+
+.employee-list .employee-name {
+  font-weight: 500;
+}
+
+.employee-list .empty-state {
+  padding: 40px 0;
+}
+
+.employee-list .empty-state h5 {
+  color: #6c757d;
+}
+
+.employee-list .pagination-buttons {
+  display: flex;
+  align-items: center;
+}
+
+.employee-list .employee-summary {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+  margin-top: 15px;
+}
+
+.employee-list .employee-summary p {
+  margin-bottom: 5px;
+}
+
+/* Modal Styles */
+.employee-list .modal-content {
+  border-radius: 12px;
+}
+
+.employee-list .modal-header {
+  background: #f8f9fa;
+  border-radius: 12px 12px 0 0;
+}
+
+.employee-list .modal-header .modal-title {
+  display: flex;
+  align-items: center;
+}
+
+.employee-list .form-label {
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.employee-list .form-control,
+.employee-list .form-select {
+  border-radius: 8px;
+  border: 2px solid #e9ecef;
+  transition: all 0.3s ease;
+}
+
+.employee-list .form-control:focus,
+.employee-list .form-select:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.employee-list .text-danger {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .employee-list .action-buttons {
+    flex-wrap: wrap;
+  }
+  
+  .employee-list .table-responsive {
+    margin: 0 -15px;
+  }
+
+  .employee-list .pagination-buttons {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.employee-list .table tbody tr {
+  animation: fadeIn 0.3s ease forwards;
+}
+
+.employee-list .table tbody tr:nth-child(1) { animation-delay: 0.05s; }
+.employee-list .table tbody tr:nth-child(2) { animation-delay: 0.1s; }
+.employee-list .table tbody tr:nth-child(3) { animation-delay: 0.15s; }
+.employee-list .table tbody tr:nth-child(4) { animation-delay: 0.2s; }
+.employee-list .table tbody tr:nth-child(5) { animation-delay: 0.25s; }

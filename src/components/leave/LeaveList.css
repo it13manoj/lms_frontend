@@ -1,0 +1,101 @@
+.leave-list .search-wrapper {
+  position: relative;
+}
+
+.leave-list .search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6c757d;
+}
+
+.leave-list .search-wrapper .form-control {
+  padding-left: 35px;
+}
+
+.leave-list .leave-table td {
+  vertical-align: middle;
+}
+
+.leave-list .pending-row {
+  background-color: rgba(255, 193, 7, 0.05) !important;
+}
+
+.leave-list .employee-info {
+  display: flex;
+  align-items: center;
+}
+
+.leave-list .date-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.leave-list .days-badge {
+  font-size: 14px;
+  padding: 6px 12px;
+}
+
+.leave-list .status-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.leave-list .status-info > * {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.leave-list .days-remaining {
+  font-size: 11px;
+}
+
+.leave-list .action-buttons {
+  display: flex;
+  gap: 5px;
+}
+
+.leave-list .action-buttons .btn {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.leave-list .empty-state {
+  padding: 40px 0;
+}
+
+.leave-list .detail-group {
+  margin-bottom: 15px;
+}
+
+.leave-list .detail-group label {
+  font-size: 12px;
+  color: #6c757d;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.leave-list .detail-group .detail-value {
+  font-size: 16px;
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.leave-list .action-section {
+  border-top: 1px solid #e9ecef;
+  padding-top: 15px;
+}
+
+@media (max-width: 768px) {
+  .leave-list .date-range {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}

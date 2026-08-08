@@ -1,0 +1,176 @@
+.leave-calendar .custom-calendar {
+  width: 100%;
+  border: none;
+  font-size: 16px;
+}
+
+.leave-calendar .has-leave {
+  background: #f8f9fa;
+  border-radius: 50%;
+}
+
+.leave-calendar .leave-markers {
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+  margin-top: 2px;
+  position: relative;
+}
+
+.leave-calendar .leave-markers .marker {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.leave-calendar .leave-markers .marker.approved {
+  background: #28a745;
+}
+
+.leave-calendar .leave-markers .marker.pending {
+  background: #ffc107;
+}
+
+.leave-calendar .leave-markers .leave-count {
+  font-size: 10px;
+  color: #6c757d;
+  position: absolute;
+  top: -10px;
+  right: -8px;
+  background: #fff;
+  padding: 1px 4px;
+  border-radius: 50%;
+  border: 1px solid #dee2e6;
+}
+
+.leave-calendar .calendar-legend {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+}
+
+.leave-calendar .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.leave-calendar .legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.leave-calendar .legend-dot.approved {
+  background: #28a745;
+}
+
+.leave-calendar .legend-dot.pending {
+  background: #ffc107;
+}
+
+.leave-calendar .legend-dot.rejected {
+  background: #dc3545;
+}
+
+.leave-calendar .summary-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.leave-calendar .stat-item {
+  background: #f8f9fa;
+  padding: 10px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.leave-calendar .stat-label {
+  display: block;
+  font-size: 12px;
+  color: #6c757d;
+  margin-bottom: 5px;
+}
+
+.leave-calendar .stat-value {
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.leave-calendar .upcoming-leaves {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.leave-calendar .upcoming-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #f1f3f4;
+}
+
+.leave-calendar .upcoming-item:last-child {
+  border-bottom: none;
+}
+
+.leave-calendar .upcoming-date {
+  text-align: center;
+  min-width: 50px;
+  margin-right: 15px;
+  padding: 5px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.leave-calendar .upcoming-date .day {
+  display: block;
+  font-size: 20px;
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+.leave-calendar .upcoming-date .month {
+  display: block;
+  font-size: 11px;
+  color: #6c757d;
+  text-transform: uppercase;
+}
+
+.leave-calendar .upcoming-info {
+  flex: 1;
+}
+
+.leave-calendar .upcoming-info .employee-name {
+  font-weight: 500;
+}
+
+.leave-calendar .leave-detail-item {
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.leave-calendar .leave-detail-item:last-child {
+  margin-bottom: 0;
+}
+
+.leave-calendar .detail-label {
+  font-size: 12px;
+  color: #6c757d;
+  margin-bottom: 4px;
+}
+
+.leave-calendar .detail-value {
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .leave-calendar .summary-stats {
+    grid-template-columns: 1fr 1fr;
+  }
+}

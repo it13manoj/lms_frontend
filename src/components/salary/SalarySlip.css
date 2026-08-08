@@ -1,0 +1,27 @@
+.salary-slip .salary-slip-card {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.salary-slip .salary-slip-header {
+  padding: 20px 0;
+}
+
+.salary-slip .salary-slip-header h3 {
+  font-weight: 600;
+}
+
+.salary-slip .salary-table td:last-child {
+  font-weight: 500;
+}
+
+@media print {
+  .salary-slip .salary-slip-card {
+    box-shadow: none !important;
+    border: 1px solid #ddd !important;
+  }
+  
+  .salary-slip .btn {
+    display: none !important;
+  }
+}

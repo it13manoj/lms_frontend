@@ -1,0 +1,21 @@
+.employee-profile .profile-card {
+  position: sticky;
+  top: 80px;
+}
+
+.employee-profile .profile-avatar {
+  margin-bottom: 15px;
+}
+
+.employee-profile .profile-avatar img {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border: 3px solid #e9ecef;
+}
+
+.employee-profile .list-group-item {
+  background: transparent;
+  border: none;
+  padding: 8px 0;
+}

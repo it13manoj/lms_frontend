@@ -1,0 +1,58 @@
+.performance-page .stat-card {
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.performance-page .stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.performance-page .stat-card h6 {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.performance-page .stat-card h3 {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 5px 0;
+}
+
+.performance-page .stars {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.performance-page .stars svg {
+  font-size: 16px;
+}
+
+.performance-page .employee-info {
+  display: flex;
+  align-items: center;
+}
+
+.performance-page .action-buttons {
+  display: flex;
+  gap: 5px;
+}
+
+.performance-page .action-buttons .btn {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .performance-page .stat-card {
+    margin-bottom: 15px;
+  }
+
+  .performance-page .stat-card h3 {
+    font-size: 22px;
+  }
+}
