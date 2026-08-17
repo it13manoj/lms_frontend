@@ -40,7 +40,7 @@ const Dashboard = () => {
       let dashboardData = {};
       
       try {
-        const response = await api.get('/dashboard/stats');
+        const response = await api.get('/employees/stats');
         if (response.data?.data) {
           dashboardData = response.data.data;
         }

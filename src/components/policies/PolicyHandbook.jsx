@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Row, Col, Badge, Button, Spinner, Alert } from 'react-bootstrap';
 import { FaFilePdf, FaFileWord, FaFileAlt, FaSearch } from 'react-icons/fa';
+import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import './PolicyHandbook.css';
 
 const PolicyHandbook = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [policies, setPolicies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -58,6 +60,10 @@ const PolicyHandbook = () => {
     ? policies 
     : policies.filter(p => p.policy_type === selectedCategory);
 
+  const handleAddNewPolicy = () => {
+    navigate('/policies/manage');
+  };
+
   const categories = [
     { value: 'all', label: 'All Policies' },
     { value: 'hr', label: 'HR Policies' },
@@ -81,7 +87,7 @@ const PolicyHandbook = () => {
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>Policy Handbook</h2>
         {(user?.role === 'admin' || user?.role === 'hr') && (
-          <Button variant="primary">
+          <Button variant="primary" onClick={handleAddNewPolicy}>
             Add New Policy
           </Button>
         )}

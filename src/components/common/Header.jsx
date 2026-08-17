@@ -1,11 +1,18 @@
 import React from 'react';
 import { FaBars, FaBell, FaUserCircle } from 'react-icons/fa';
 import { Navbar, Nav, Dropdown } from 'react-bootstrap';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import './Header.css';
 
 const Header = ({ toggleSidebar }) => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login', { replace: true });
+  };
 
   return (
     <Navbar className="header" expand="lg">
@@ -34,7 +41,7 @@ const Header = ({ toggleSidebar }) => {
               <Dropdown.Item href="/profile">Profile</Dropdown.Item>
               <Dropdown.Item href="/settings">Settings</Dropdown.Item>
               <Dropdown.Divider />
-              <Dropdown.Item href="/logout">Logout</Dropdown.Item>
+              <Dropdown.Item onClick={handleLogout}>Logout</Dropdown.Item>
             </Dropdown.Menu>
           </Dropdown>
         </Nav>

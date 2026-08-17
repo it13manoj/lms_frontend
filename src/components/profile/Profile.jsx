@@ -148,7 +148,7 @@ const Profile = () => {
                 </ListGroup.Item>
                 <ListGroup.Item>
                   <FaMoneyBillWave className="me-2 text-primary" />
-                  Salary: ${employee?.salary?.toLocaleString() || '0'}
+                  Salary: ₹{employee?.salary?.toLocaleString() || '0'}
                 </ListGroup.Item>
               </ListGroup>
             </Card.Body>

@@ -16,9 +16,28 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   const navigate = useNavigate();
   const [expandedMenus, setExpandedMenus] = useState({});
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+const handleLogout = (e) => {
+  console.log("Hello");
+  
+  e.preventDefault();
+    try {
+      console.log("1. Removing token...");
+      localStorage.removeItem('token');
+      
+      console.log("2. Clearing API headers...");
+      if (typeof api !== 'undefined' && api.defaults) {
+        delete api.defaults.headers.common['Authorization'];
+      }
+
+      console.log("3. Updating auth states...");
+      if (typeof setToken === 'function') setToken(null);
+      if (typeof setUser === 'function') setUser(null);
+
+      console.log("4. Navigating to login...");
+      navigate('/login', { replace: true });
+    } catch (error) {
+      console.error("CRASH DURING LOGOUT:", error);
+    }
   };
 
   const toggleMenu = (menuPath) => {
