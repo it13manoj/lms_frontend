@@ -42,14 +42,26 @@ ChartJS.register(
   Filler
 );
 
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
 const AttendanceTracker = () => {
   const { user } = useAuth();
   const isAdminOrHR = user?.role === 'admin' || user?.role === 'hr' || user?.role === 'manager';
 
-  // Navigation tabs
-  const [activeTab, setActiveTab] = useState('panel'); // 'panel' or 'self'
+  // Navigation tabs: Defaults to 'panel' for Admin/HR, 'self' for regular employees
+  const [activeTab, setActiveTab] = useState(isAdminOrHR ? 'panel' : 'self');
 
-  // Daily Panel State
+  // Enforce self tab for regular employees
+  useEffect(() => {
+    if (!isAdminOrHR) {
+      setActiveTab('self');
+    }
+  }, [isAdminOrHR]);
+
+  // Daily Panel State (Admin/HR Team View)
   const [selectedDate, setSelectedDate] = useState('');
   const [dailyData, setDailyData] = useState([]);
   const [summary, setSummary] = useState({
@@ -73,28 +85,35 @@ const AttendanceTracker = () => {
   const [selectedMonthlyEmployee, setSelectedMonthlyEmployee] = useState(null);
   const [showMonthlyModal, setShowMonthlyModal] = useState(false);
 
-  // Self Attendance State
-  const [myAttendance, setMyAttendance] = useState([]);
+  // Self Attendance State (Employee View)
+  const [selfYear, setSelfYear] = useState(new Date().getFullYear());
+  const [selfMonth, setSelfMonth] = useState(new Date().getMonth() + 1); // 1-12
+  const [selfStatusFilter, setSelfStatusFilter] = useState('all');
+  const [selfDateSearch, setSelfDateSearch] = useState('');
+  const [selfMonthlyData, setSelfMonthlyData] = useState(null);
+  const [selfMonthlyLoading, setSelfMonthlyLoading] = useState(false);
+  const [selfMonthlyError, setSelfMonthlyError] = useState('');
   const [myStats, setMyStats] = useState(null);
-  const [myFilter, setMyFilter] = useState('week');
   const [checkingIn, setCheckingIn] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
   const [selfLoading, setSelfLoading] = useState(false);
-  const chartRef = useRef(null);
 
-  // Initial fetch for Daily Panel
+  // Initial fetch for Daily Panel (Admins/HR only)
   useEffect(() => {
-    fetchDailyAttendance(selectedDate);
-  }, [selectedDate, statusFilter]);
-
-  // Fetch for Self Attendance
-  useEffect(() => {
-    if (activeTab === 'self') {
-      fetchSelfAttendance();
+    if (isAdminOrHR && activeTab === 'panel') {
+      fetchDailyAttendance(selectedDate);
     }
-  }, [activeTab, myFilter]);
+  }, [selectedDate, statusFilter, isAdminOrHR, activeTab]);
 
-  // Fetch Daily Attendance from Backend
+  // Fetch Self Attendance & Self Monthly Records
+  useEffect(() => {
+    if (!isAdminOrHR || activeTab === 'self') {
+      fetchSelfAttendance();
+      fetchSelfMonthlyAttendance(selfYear, selfMonth, selfStatusFilter, selfDateSearch);
+    }
+  }, [isAdminOrHR, activeTab, selfYear, selfMonth, selfStatusFilter]);
+
+  // Fetch Daily Attendance from Backend (Admins / HR)
   const fetchDailyAttendance = async (date) => {
     try {
       setPanelLoading(true);
@@ -124,22 +143,72 @@ const AttendanceTracker = () => {
     }
   };
 
-  // Fetch Personal Attendance Data
+  // Fetch Personal Attendance Stats (Today's status)
   const fetchSelfAttendance = async () => {
     try {
       setSelfLoading(true);
-      const [attRes, statsRes] = await Promise.all([
-        api.get('/attendance/daily', { params: { search: user?.email } }).catch(() => ({ data: { data: [] } })),
-        api.get('/attendance/stats').catch(() => ({ data: { data: {} } }))
-      ]);
-
-      const attList = attRes.data?.data || [];
-      setMyAttendance(attList);
+      const statsRes = await api.get('/attendance/stats').catch(() => ({ data: { data: {} } }));
       setMyStats(statsRes.data?.data || null);
     } catch (err) {
       console.error('Error fetching personal attendance:', err);
     } finally {
       setSelfLoading(false);
+    }
+  };
+
+  // Fetch Complete Personal Monthly Attendance
+  const fetchSelfMonthlyAttendance = async (year, month, status, search) => {
+    try {
+      setSelfMonthlyLoading(true);
+      setSelfMonthlyError('');
+
+      const params = {
+        year: year !== undefined ? year : selfYear,
+        month: month !== undefined ? month : selfMonth
+      };
+      if (status && status !== 'all') params.status = status;
+      if (search) params.dateSearch = search;
+
+      const empId = user?.employee?.id || user?.id;
+      if (empId) params.employeeId = empId;
+
+      const res = await api.get('/attendance/employee-monthly', { params });
+      if (res.data && res.data.success) {
+        setSelfMonthlyData(res.data);
+      } else {
+        setSelfMonthlyError(res.data?.message || 'Failed to load personal monthly attendance');
+      }
+    } catch (err) {
+      console.error('Fetch self monthly error:', err);
+      setSelfMonthlyError(err.response?.data?.message || 'Error loading monthly attendance records.');
+    } finally {
+      setSelfMonthlyLoading(false);
+    }
+  };
+
+  const handlePrevSelfMonth = () => {
+    if (selfMonth === 'all') {
+      setSelfMonth(12);
+      return;
+    }
+    if (selfMonth === 1) {
+      setSelfYear(prev => prev - 1);
+      setSelfMonth(12);
+    } else {
+      setSelfMonth(prev => prev - 1);
+    }
+  };
+
+  const handleNextSelfMonth = () => {
+    if (selfMonth === 'all') {
+      setSelfMonth(1);
+      return;
+    }
+    if (selfMonth === 12) {
+      setSelfYear(prev => prev + 1);
+      setSelfMonth(1);
+    } else {
+      setSelfMonth(prev => prev + 1);
     }
   };
 
@@ -227,8 +296,9 @@ const AttendanceTracker = () => {
     try {
       setCheckingIn(true);
       await api.post('/attendance/check-in');
-      fetchDailyAttendance(selectedDate);
       fetchSelfAttendance();
+      fetchSelfMonthlyAttendance(selfYear, selfMonth, selfStatusFilter, selfDateSearch);
+      if (isAdminOrHR) fetchDailyAttendance(selectedDate);
     } catch (error) {
       alert(error.response?.data?.message || 'Failed to check in');
     } finally {
@@ -240,13 +310,46 @@ const AttendanceTracker = () => {
     try {
       setCheckingOut(true);
       await api.post('/attendance/check-out');
-      fetchDailyAttendance(selectedDate);
       fetchSelfAttendance();
+      fetchSelfMonthlyAttendance(selfYear, selfMonth, selfStatusFilter, selfDateSearch);
+      if (isAdminOrHR) fetchDailyAttendance(selectedDate);
     } catch (error) {
       alert(error.response?.data?.message || 'Failed to check out');
     } finally {
       setCheckingOut(false);
     }
+  };
+
+  // Export Self Monthly Attendance to CSV
+  const handleExportSelfCSV = () => {
+    if (!selfMonthlyData || !selfMonthlyData.days || selfMonthlyData.days.length === 0) return;
+    const empName = selfMonthlyData.employee?.name || user?.employee?.first_name || 'My_Attendance';
+    const monthLabel = selfMonth === 'all' ? 'All_Months' : MONTH_NAMES[selfMonth - 1];
+
+    const headers = [
+      'Date', 'Day', 'Status', 'Check-In', 'Late Comment',
+      'Check-Out', 'Early Departure Comment', 'Working Hours', 'Remarks'
+    ];
+    const rows = selfMonthlyData.days.map(d => [
+      `"${d.date}"`,
+      `"${d.dayOfWeek} (${d.fullDay})"`,
+      `"${d.status}"`,
+      `"${d.check_in_formatted || '--:--'}"`,
+      `"${d.late_comment || ''}"`,
+      `"${d.check_out_formatted || '--:--'}"`,
+      `"${d.early_leave_comment || ''}"`,
+      `"${d.working_hours || 0}"`,
+      `"${d.remarks || ''}"`
+    ]);
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `${empName.replace(/\s+/g, '_')}_Attendance_${monthLabel}_${selfYear}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // Format Helper for display
@@ -262,7 +365,9 @@ const AttendanceTracker = () => {
       {/* Top Header */}
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
         <div>
-          <h2 className="fs-3 fw-bold mb-1 text-dark">Attendance Management Panel</h2>
+          <h2 className="fs-3 fw-bold mb-1 text-dark">
+            {isAdminOrHR && activeTab === 'panel' ? 'Attendance Management Panel' : 'My Attendance & Biometric Portal'}
+          </h2>
           <div className="d-flex flex-wrap align-items-center gap-2">
             <span className="office-timing-badge">
               <FaBusinessTime />
@@ -286,7 +391,7 @@ const AttendanceTracker = () => {
             </Button>
           )}
 
-          {activeTab === 'panel' && (
+          {isAdminOrHR && activeTab === 'panel' && (
             <Button 
               variant="outline-secondary" 
               className="d-flex align-items-center gap-2 bg-white"
@@ -294,38 +399,52 @@ const AttendanceTracker = () => {
               disabled={dailyData.length === 0}
             >
               <FaFileDownload />
-              <span>Export CSV</span>
+              <span>Export Daily CSV</span>
+            </Button>
+          )}
+
+          {(!isAdminOrHR || activeTab === 'self') && (
+            <Button 
+              variant="outline-secondary" 
+              className="d-flex align-items-center gap-2 bg-white"
+              onClick={handleExportSelfCSV}
+              disabled={!selfMonthlyData?.days || selfMonthlyData.days.length === 0}
+            >
+              <FaFileDownload />
+              <span>Export Monthly CSV</span>
             </Button>
           )}
         </div>
       </div>
 
-      {/* Tabs Navigation */}
-      <Nav variant="tabs" className="mb-4 bg-white px-3 pt-2 rounded-top border-bottom">
-        <Nav.Item>
-          <Nav.Link 
-            active={activeTab === 'panel'} 
-            onClick={() => setActiveTab('panel')}
-            className="fw-semibold d-flex align-items-center gap-2"
-          >
-            <FaCalendarCheck />
-            <span>Daily Attendance & Team Panel</span>
-          </Nav.Link>
-        </Nav.Item>
-        <Nav.Item>
-          <Nav.Link 
-            active={activeTab === 'self'} 
-            onClick={() => setActiveTab('self')}
-            className="fw-semibold d-flex align-items-center gap-2"
-          >
-            <FaClock />
-            <span>My Attendance & Punch</span>
-          </Nav.Link>
-        </Nav.Item>
-      </Nav>
+      {/* Tabs Navigation: Only shown to Admin, HR, and Manager */}
+      {isAdminOrHR && (
+        <Nav variant="tabs" className="mb-4 bg-white px-3 pt-2 rounded-top border-bottom">
+          <Nav.Item>
+            <Nav.Link 
+              active={activeTab === 'panel'} 
+              onClick={() => setActiveTab('panel')}
+              className="fw-semibold d-flex align-items-center gap-2"
+            >
+              <FaCalendarCheck />
+              <span>Daily Attendance & Team Panel</span>
+            </Nav.Link>
+          </Nav.Item>
+          <Nav.Item>
+            <Nav.Link 
+              active={activeTab === 'self'} 
+              onClick={() => setActiveTab('self')}
+              className="fw-semibold d-flex align-items-center gap-2"
+            >
+              <FaClock />
+              <span>My Attendance & Punch</span>
+            </Nav.Link>
+          </Nav.Item>
+        </Nav>
+      )}
 
-      {/* TAB 1: DAILY ATTENDANCE & TEAM PANEL */}
-      {activeTab === 'panel' && (
+      {/* TAB 1: DAILY ATTENDANCE & TEAM PANEL (Admins / HR / Managers only) */}
+      {isAdminOrHR && activeTab === 'panel' && (
         <>
           {/* Date Selector & Quick Filters */}
           <div className="bg-white p-3 rounded-3 shadow-sm border mb-4">
@@ -771,60 +890,70 @@ const AttendanceTracker = () => {
         </>
       )}
 
-      {/* TAB 2: PERSONAL ATTENDANCE & PUNCH */}
-      {activeTab === 'self' && (
+      {/* TAB 2: PERSONAL ATTENDANCE & PUNCH (Shown to regular employees and to managers on 'self' tab) */}
+      {(!isAdminOrHR || activeTab === 'self') && (
         <div>
+          {/* Top 2 Action & Profile Cards */}
           <Row className="g-3 mb-4">
+            {/* Action Card: Today's Status & Punch */}
             <Col xs={12} lg={6}>
-              <Card className="attendance-action-card h-100 shadow-sm">
+              <Card className="attendance-action-card h-100 shadow-sm border-0">
                 <Card.Body className="d-flex flex-column justify-content-between p-4">
-                  <h5 className="card-title fw-bold">My Status Today</h5>
-                  <div className="text-center py-4">
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <h5 className="card-title fw-bold mb-0">Today's Punch Status</h5>
+                    <Badge bg="light" className="text-secondary border py-2 px-3">
+                      <FaCalendarDay className="me-1 text-primary" /> {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                    </Badge>
+                  </div>
+
+                  <div className="text-center py-3">
                     {myStats?.todayStatus === 'checked-in' ? (
                       <>
                         <div className="status-icon checked-in mb-3">
-                          <FaClock size={36} className="text-success" />
+                          <FaClock size={40} className="text-success" />
                         </div>
-                        <h4 className="fw-bold">Checked In</h4>
+                        <h4 className="fw-bold text-success mb-1">Checked In</h4>
                         <p className="text-muted mb-3">
-                          Check-in recorded at: <strong>{myStats?.checkInTime}</strong>
+                          First punch recorded at: <strong className="text-dark font-monospace fs-5">{myStats?.checkInTime}</strong>
                         </p>
                         <Button 
                           variant="danger" 
                           onClick={handleCheckOut}
                           disabled={checkingOut}
-                          className="px-4 py-2"
+                          className="px-4 py-2 shadow-sm fw-semibold"
                         >
-                          {checkingOut ? <><Spinner size="sm" className="me-2" />Checking Out...</> : 'Punch Check Out'}
+                          {checkingOut ? <><Spinner size="sm" className="me-2" />Recording Departure...</> : 'Punch Check Out'}
                         </Button>
                       </>
                     ) : myStats?.todayStatus === 'checked-out' ? (
                       <>
                         <div className="status-icon completed mb-3">
-                          <FaCheckCircle size={36} className="text-primary" />
+                          <FaCheckCircle size={40} className="text-primary" />
                         </div>
-                        <h4 className="fw-bold text-success">Attendance Completed</h4>
-                        <p className="text-muted mb-2">
-                          Checked out at: <strong>{myStats?.checkOutTime}</strong>
+                        <h4 className="fw-bold text-success mb-1">Attendance Completed</h4>
+                        <p className="text-muted mb-3">
+                          Checked out at: <strong className="text-dark font-monospace fs-5">{myStats?.checkOutTime}</strong>
                         </p>
-                        <Badge bg="success" className="p-2">
+                        <Badge bg="success" className="py-2 px-3 fs-6">
                           ✓ Today's punches recorded
                         </Badge>
                       </>
                     ) : (
                       <>
                         <div className="status-icon not-checked mb-3">
-                          <FaCalendarCheck size={36} className="text-warning" />
+                          <FaCalendarCheck size={40} className="text-warning" />
                         </div>
-                        <h4 className="fw-bold">Not Checked In</h4>
-                        <p className="text-muted mb-3">Office timing begins at 09:30 AM</p>
+                        <h4 className="fw-bold mb-1">Not Checked In Yet</h4>
+                        <p className="text-muted mb-3">
+                          Standard office timing: <strong>09:30 AM – 06:30 PM</strong>
+                        </p>
                         <Button 
                           variant="primary" 
                           onClick={handleCheckIn}
                           disabled={checkingIn}
-                          className="px-4 py-2"
+                          className="px-4 py-2 shadow-sm fw-semibold"
                         >
-                          {checkingIn ? <><Spinner size="sm" className="me-2" />Checking In...</> : 'Punch Check In'}
+                          {checkingIn ? <><Spinner size="sm" className="me-2" />Recording Arrival...</> : 'Punch Check In'}
                         </Button>
                       </>
                     )}
@@ -833,33 +962,58 @@ const AttendanceTracker = () => {
               </Card>
             </Col>
 
+            {/* Profile Greeting & Quick Stats */}
             <Col xs={12} lg={6}>
-              <Card className="stats-card h-100 shadow-sm">
+              <Card className="stats-card h-100 shadow-sm border-0">
                 <Card.Body className="d-flex flex-column justify-content-between p-4">
-                  <h5 className="card-title fw-bold mb-3">My Monthly Attendance</h5>
-                  <Row className="g-3">
-                    <Col xs={6}>
-                      <div className="p-3 rounded bg-success bg-opacity-10 text-center">
-                        <div className="text-muted small fw-bold">PRESENT</div>
-                        <h3 className="text-success fw-bold mb-0">{myStats?.monthlyStats?.present || 0}</h3>
+                  <div className="d-flex align-items-center gap-3 mb-3">
+                    <div 
+                      className="employee-avatar shadow-sm"
+                      style={{ width: '52px', height: '52px', fontSize: '20px' }}
+                    >
+                      {getInitials(selfMonthlyData?.employee?.name || user?.employee?.first_name || user?.email)}
+                    </div>
+                    <div>
+                      <h5 className="fw-bold mb-0 text-dark">
+                        {selfMonthlyData?.employee?.name || `${user?.employee?.first_name || ''} ${user?.employee?.last_name || ''}`.trim() || 'My Attendance'}
+                      </h5>
+                      <div className="text-muted small">
+                        Job No: <span className="fw-bold text-primary font-monospace">{selfMonthlyData?.employee?.job_no || user?.employee?.employee_id || '--'}</span>
+                        <span className="mx-2">•</span>
+                        <span>{user?.employee?.department || 'Staff'}</span>
+                        <span className="mx-2">•</span>
+                        <span>{user?.employee?.position || 'Employee'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Summary Highlights for selected month */}
+                  <Row className="g-2 text-center">
+                    <Col xs={4}>
+                      <div className="p-3 rounded bg-primary bg-opacity-10">
+                        <div className="text-primary small fw-bold">WORKING DAYS</div>
+                        <h3 className="text-primary fw-bold mb-0">{selfMonthlyData?.summary?.workingDays || 0}</h3>
+                        <div className="text-muted" style={{ fontSize: '11px' }}>of {selfMonthlyData?.summary?.totalDays || 0} days</div>
                       </div>
                     </Col>
-                    <Col xs={6}>
-                      <div className="p-3 rounded bg-danger bg-opacity-10 text-center">
-                        <div className="text-muted small fw-bold">ABSENT</div>
-                        <h3 className="text-danger fw-bold mb-0">{myStats?.monthlyStats?.absent || 0}</h3>
+                    <Col xs={4}>
+                      <div className="p-3 rounded bg-success bg-opacity-10">
+                        <div className="text-success small fw-bold">PRESENT</div>
+                        <h3 className="text-success fw-bold mb-0">{selfMonthlyData?.summary?.presentCount || 0}</h3>
+                        <div className="text-muted" style={{ fontSize: '11px' }}>
+                          {(selfMonthlyData?.summary?.workingDays || 0) > 0 
+                            ? `${Math.round(((selfMonthlyData?.summary?.presentCount || 0) / selfMonthlyData.summary.workingDays) * 100)}% attendance`
+                            : '0%'}
+                        </div>
                       </div>
                     </Col>
-                    <Col xs={6}>
-                      <div className="p-3 rounded bg-warning bg-opacity-10 text-center">
-                        <div className="text-muted small fw-bold">LATE ARRIVAL</div>
-                        <h3 className="text-warning fw-bold mb-0">{myStats?.monthlyStats?.late || 0}</h3>
-                      </div>
-                    </Col>
-                    <Col xs={6}>
-                      <div className="p-3 rounded bg-info bg-opacity-10 text-center">
-                        <div className="text-muted small fw-bold">HALF DAY</div>
-                        <h3 className="text-info fw-bold mb-0">{myStats?.monthlyStats?.['half-day'] || 0}</h3>
+                    <Col xs={4}>
+                      <div className="p-3 rounded bg-purple bg-opacity-10" style={{ backgroundColor: '#f3e8ff' }}>
+                        <div className="text-purple small fw-bold">LOGGED HOURS</div>
+                        <h3 className="text-purple fw-bold mb-0">{selfMonthlyData?.summary?.totalWorkingHours || 0}h</h3>
+                        <div className="text-muted" style={{ fontSize: '11px' }}>
+                          Avg: {selfMonthlyData?.summary?.avgWorkingHours || 0}h/day
+                        </div>
                       </div>
                     </Col>
                   </Row>
@@ -867,6 +1021,395 @@ const AttendanceTracker = () => {
               </Card>
             </Col>
           </Row>
+
+          {/* Monthly Detailed Breakdown Card */}
+          <Card className="attendance-table-card shadow-sm border-0 mb-4">
+            <Card.Header className="bg-white p-3 border-bottom">
+              <Row className="g-2 align-items-center">
+                {/* Year Selector */}
+                <Col xs={6} sm={4} md={2}>
+                  <Form.Label className="small text-muted fw-bold mb-1">Year</Form.Label>
+                  <Form.Select 
+                    size="sm" 
+                    value={selfYear} 
+                    onChange={(e) => setSelfYear(parseInt(e.target.value, 10))}
+                  >
+                    {[2025, 2026, 2027].map(yr => (
+                      <option key={yr} value={yr}>{yr}</option>
+                    ))}
+                  </Form.Select>
+                </Col>
+
+                {/* Month Selector with Prev/Next */}
+                <Col xs={6} sm={8} md={4}>
+                  <Form.Label className="small text-muted fw-bold mb-1">Month</Form.Label>
+                  <div className="d-flex align-items-center gap-1">
+                    <Button 
+                      variant="outline-secondary" 
+                      size="sm" 
+                      onClick={handlePrevSelfMonth}
+                      title="Previous Month"
+                      className="px-2"
+                    >
+                      <FaChevronLeft size={10} />
+                    </Button>
+                    <Form.Select 
+                      size="sm" 
+                      value={selfMonth} 
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelfMonth(val === 'all' ? 'all' : parseInt(val, 10));
+                      }}
+                      className="fw-semibold"
+                    >
+                      {MONTH_NAMES.map((mName, idx) => (
+                        <option key={idx + 1} value={idx + 1}>
+                          {mName} {selfYear}
+                        </option>
+                      ))}
+                      <option value="all">Full Year ({selfYear})</option>
+                    </Form.Select>
+                    <Button 
+                      variant="outline-secondary" 
+                      size="sm" 
+                      onClick={handleNextSelfMonth}
+                      title="Next Month"
+                      className="px-2"
+                    >
+                      <FaChevronRight size={10} />
+                    </Button>
+                  </div>
+                </Col>
+
+                {/* Status Filter */}
+                <Col xs={12} sm={6} md={3}>
+                  <Form.Label className="small text-muted fw-bold mb-1">Status Filter</Form.Label>
+                  <Form.Select 
+                    size="sm" 
+                    value={selfStatusFilter} 
+                    onChange={(e) => setSelfStatusFilter(e.target.value)}
+                  >
+                    <option value="all">All Days</option>
+                    <option value="working_days">Working Days Only</option>
+                    <option value="present">Present Days Only</option>
+                    <option value="absent">Absent Days Only</option>
+                    <option value="late">Late Comers (&gt; 09:30 AM)</option>
+                    <option value="early_leave">Left Early (&lt; 06:30 PM)</option>
+                    <option value="on_time">On Time Days</option>
+                    <option value="weekend">Weekends (Sundays)</option>
+                  </Form.Select>
+                </Col>
+
+                {/* Search Day / Date */}
+                <Col xs={12} sm={6} md={3}>
+                  <Form.Label className="small text-muted fw-bold mb-1">Find Day / Date</Form.Label>
+                  <InputGroup size="sm">
+                    <InputGroup.Text className="bg-white border-end-0">
+                      <FaSearch className="text-muted" size={12} />
+                    </InputGroup.Text>
+                    <Form.Control 
+                      placeholder="e.g. 15 or Mon" 
+                      value={selfDateSearch}
+                      onChange={(e) => {
+                        setSelfDateSearch(e.target.value);
+                        fetchSelfMonthlyAttendance(selfYear, selfMonth, selfStatusFilter, e.target.value);
+                      }}
+                      className="border-start-0 ps-0"
+                    />
+                    {selfDateSearch && (
+                      <Button 
+                        variant="outline-secondary" 
+                        size="sm"
+                        onClick={() => {
+                          setSelfDateSearch('');
+                          fetchSelfMonthlyAttendance(selfYear, selfMonth, selfStatusFilter, '');
+                        }}
+                      >
+                        ✕
+                      </Button>
+                    )}
+                  </InputGroup>
+                </Col>
+              </Row>
+            </Card.Header>
+
+            <Card.Body className="p-3">
+              {/* Monthly KPI Summary Cards (All Clickable Filters) */}
+              <Row className="g-2 mb-4">
+                <Col xs={6} sm={4} md={2}>
+                  <div 
+                    className={`border rounded p-2 text-center bg-white shadow-sm modal-kpi-card ${
+                      selfStatusFilter === 'working_days' ? 'border-primary border-2 bg-primary bg-opacity-10 active-filter' : ''
+                    }`}
+                    onClick={() => setSelfStatusFilter(selfStatusFilter === 'working_days' ? 'all' : 'working_days')}
+                    title="Click to toggle filter: Working Days only"
+                  >
+                    <div className="text-primary small fw-bold">WORKING DAYS</div>
+                    <div className="fs-5 fw-bold text-primary mt-1">{selfMonthlyData?.summary?.workingDays || 0}</div>
+                    <div className="text-muted" style={{ fontSize: '11px' }}>
+                      of {selfMonthlyData?.summary?.totalDays || 0} days {selfStatusFilter === 'working_days' ? '✓ Active' : ''}
+                    </div>
+                  </div>
+                </Col>
+
+                <Col xs={6} sm={4} md={2}>
+                  <div 
+                    className={`border rounded p-2 text-center bg-white shadow-sm modal-kpi-card ${
+                      selfStatusFilter === 'present' ? 'border-success border-2 bg-success bg-opacity-10 active-filter' : ''
+                    }`}
+                    onClick={() => setSelfStatusFilter(selfStatusFilter === 'present' ? 'all' : 'present')}
+                    title="Click to toggle filter: Present Days"
+                  >
+                    <div className="text-success small fw-bold">PRESENT</div>
+                    <div className="fs-5 fw-bold text-success mt-1">{selfMonthlyData?.summary?.presentCount || 0}</div>
+                    <div className="text-muted" style={{ fontSize: '11px' }}>
+                      {selfStatusFilter === 'present' ? '✓ Active' : ((selfMonthlyData?.summary?.workingDays || 0) > 0 ? `${Math.round(((selfMonthlyData?.summary?.presentCount || 0) / selfMonthlyData.summary.workingDays) * 100)}% attendance` : '0%')}
+                    </div>
+                  </div>
+                </Col>
+
+                <Col xs={6} sm={4} md={2}>
+                  <div 
+                    className={`border rounded p-2 text-center bg-white shadow-sm modal-kpi-card ${
+                      selfStatusFilter === 'absent' ? 'border-danger border-2 bg-danger bg-opacity-10 active-filter' : ''
+                    }`}
+                    onClick={() => setSelfStatusFilter(selfStatusFilter === 'absent' ? 'all' : 'absent')}
+                    title="Click to toggle filter: Absent Days"
+                  >
+                    <div className="text-danger small fw-bold">ABSENT</div>
+                    <div className="fs-5 fw-bold text-danger mt-1">{selfMonthlyData?.summary?.absentCount || 0}</div>
+                    <div className="text-muted" style={{ fontSize: '11px' }}>
+                      {selfStatusFilter === 'absent' ? '✓ Active' : 'Unpunched days'}
+                    </div>
+                  </div>
+                </Col>
+
+                <Col xs={6} sm={4} md={2}>
+                  <div 
+                    className={`border rounded p-2 text-center bg-white shadow-sm modal-kpi-card ${
+                      selfStatusFilter === 'late' ? 'border-warning border-2 bg-warning bg-opacity-10 active-filter' : ''
+                    }`}
+                    onClick={() => setSelfStatusFilter(selfStatusFilter === 'late' ? 'all' : 'late')}
+                    title="Click to toggle filter: Late Arrivals (> 09:30 AM)"
+                  >
+                    <div className="text-warning small fw-bold">LATE ARRIVALS</div>
+                    <div className="fs-5 fw-bold text-warning mt-1">{selfMonthlyData?.summary?.lateCount || 0}</div>
+                    <div className="text-muted" style={{ fontSize: '11px' }}>
+                      {selfStatusFilter === 'late' ? '✓ Active' : '> 09:30 AM'}
+                    </div>
+                  </div>
+                </Col>
+
+                <Col xs={6} sm={4} md={2}>
+                  <div 
+                    className={`border rounded p-2 text-center bg-white shadow-sm modal-kpi-card ${
+                      selfStatusFilter === 'early_leave' ? 'border-info border-2 bg-info bg-opacity-10 active-filter' : ''
+                    }`}
+                    onClick={() => setSelfStatusFilter(selfStatusFilter === 'early_leave' ? 'all' : 'early_leave')}
+                    title="Click to toggle filter: Left Early (< 06:30 PM)"
+                  >
+                    <div className="text-purple small fw-bold">LEFT EARLY</div>
+                    <div className="fs-5 fw-bold text-purple mt-1">{selfMonthlyData?.summary?.earlyLeaveCount || 0}</div>
+                    <div className="text-muted" style={{ fontSize: '11px' }}>
+                      {selfStatusFilter === 'early_leave' ? '✓ Active' : '< 06:30 PM'}
+                    </div>
+                  </div>
+                </Col>
+
+                <Col xs={6} sm={4} md={2}>
+                  <div 
+                    className={`border rounded p-2 text-center bg-white shadow-sm modal-kpi-card ${
+                      selfStatusFilter === 'on_time' ? 'border-success border-2 bg-success bg-opacity-10 active-filter' : ''
+                    }`}
+                    onClick={() => setSelfStatusFilter(selfStatusFilter === 'on_time' ? 'all' : 'on_time')}
+                    title="Click to toggle filter: On Time Days"
+                  >
+                    <div className="text-success small fw-bold">ON TIME</div>
+                    <div className="fs-5 fw-bold text-success mt-1">{selfMonthlyData?.summary?.onTimeCount || 0}</div>
+                    <div className="text-muted" style={{ fontSize: '11px' }}>
+                      {selfStatusFilter === 'on_time' ? '✓ Active' : `${selfMonthlyData?.summary?.totalWorkingHours || 0}h total`}
+                    </div>
+                  </div>
+                </Col>
+              </Row>
+
+              {/* Attendance Table */}
+              {selfMonthlyLoading ? (
+                <div className="text-center py-5">
+                  <Spinner animation="border" variant="primary" />
+                  <p className="mt-2 text-muted small">Loading personal attendance records...</p>
+                </div>
+              ) : selfMonthlyError ? (
+                <Alert variant="danger">{selfMonthlyError}</Alert>
+              ) : !selfMonthlyData?.days || selfMonthlyData.days.length === 0 ? (
+                <div className="text-center py-5 bg-white border rounded">
+                  <FaCalendarDay size={40} className="text-muted opacity-50 mb-2" />
+                  <p className="fw-bold mb-1">No attendance records found matching filters.</p>
+                  <p className="text-muted small">Try choosing another month or resetting the status filter.</p>
+                </div>
+              ) : (
+                <div className="table-responsive border rounded bg-white shadow-sm">
+                  <Table hover size="sm" className="attendance-table align-middle mb-0">
+                    <thead className="table-light">
+                      <tr>
+                        <th>Date & Day</th>
+                        <th>Status</th>
+                        <th>Check-In (09:30 AM)</th>
+                        <th>Check-Out (06:30 PM)</th>
+                        <th>Working Hours</th>
+                        <th>Remarks / Comment</th>
+                        <th>Biometric Logs</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selfMonthlyData.days.map((day) => (
+                        <tr key={day.date} className={day.isWeekend ? 'bg-light bg-opacity-50' : ''}>
+                          {/* Date & Day */}
+                          <td>
+                            <div className="d-flex align-items-center gap-2">
+                              <span className="fw-bold font-monospace">{day.date}</span>
+                              <Badge bg={day.isWeekend ? 'secondary' : 'light'} className={day.isWeekend ? '' : 'text-dark border'}>
+                                {day.dayOfWeek}
+                              </Badge>
+                            </div>
+                          </td>
+
+                          {/* Status */}
+                          <td>
+                            {day.status === 'present' ? (
+                              <span className="badge-present d-inline-flex align-items-center gap-1">
+                                <FaCheckCircle size={10} />
+                                <span>Present</span>
+                              </span>
+                            ) : day.status === 'absent' ? (
+                              <span className="badge-absent d-inline-flex align-items-center gap-1">
+                                <FaTimesCircle size={10} />
+                                <span>Absent</span>
+                              </span>
+                            ) : day.status === 'weekend' ? (
+                              <span className="badge bg-secondary d-inline-flex align-items-center gap-1 py-1 px-2">
+                                <span>Weekly Off</span>
+                              </span>
+                            ) : day.status === 'holiday' ? (
+                              <span className="badge bg-info d-inline-flex align-items-center gap-1 py-1 px-2">
+                                <span>Holiday</span>
+                              </span>
+                            ) : (
+                              <span className="badge bg-light text-muted border">Upcoming</span>
+                            )}
+                          </td>
+
+                          {/* Check In */}
+                          <td>
+                            {day.is_present ? (
+                              <div>
+                                <span className="fw-bold font-monospace">{day.check_in_formatted}</span>
+                                {day.is_late ? (
+                                  <div className="mt-1">
+                                    <span className="badge-late">⚠️ Late ({day.late_minutes}m)</span>
+                                  </div>
+                                ) : (
+                                  <div className="mt-1">
+                                    <span className="badge-ontime">✓ On Time</span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-muted small">--:--</span>
+                            )}
+                          </td>
+
+                          {/* Check Out */}
+                          <td>
+                            {day.is_present ? (
+                              day.check_out ? (
+                                <div>
+                                  <span className="fw-bold font-monospace">{day.check_out_formatted}</span>
+                                  {day.is_early_leave ? (
+                                    <div className="mt-1">
+                                      <span className="badge-early-leave">⏱ Left early ({day.early_leave_minutes}m)</span>
+                                    </div>
+                                  ) : (
+                                    <div className="mt-1">
+                                      <span className="badge-ontime">✓ Full Day</span>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <div>
+                                  <span className="text-warning small fw-bold">No Check-Out</span>
+                                  <div className="text-muted" style={{ fontSize: '11px' }}>Missed exit punch</div>
+                                </div>
+                              )
+                            ) : (
+                              <span className="text-muted small">--:--</span>
+                            )}
+                          </td>
+
+                          {/* Working Hours */}
+                          <td>
+                            {day.is_present && day.working_hours > 0 ? (
+                              <div>
+                                <span className="hours-pill">
+                                  <FaClock size={11} className="text-primary" />
+                                  <span>{day.working_hours_formatted}</span>
+                                </span>
+                                <div className="mt-1" style={{ maxWidth: '100px' }}>
+                                  <ProgressBar 
+                                    now={Math.min(100, (day.working_hours / 9) * 100)} 
+                                    variant={day.working_hours >= 8 ? 'success' : day.working_hours >= 4 ? 'warning' : 'danger'}
+                                    style={{ height: '4px' }}
+                                  />
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-muted small">0 hrs</span>
+                            )}
+                          </td>
+
+                          {/* Remarks */}
+                          <td>
+                            {day.is_present ? (
+                              <span className="small text-secondary">{day.remarks || 'Standard punch'}</span>
+                            ) : day.isWeekend ? (
+                              <span className="small text-muted fst-italic">Sunday Off</span>
+                            ) : day.isHoliday ? (
+                              <span className="small text-info fw-semibold">{day.remarks}</span>
+                            ) : (
+                              <span className="small text-danger">No punch recorded</span>
+                            )}
+                          </td>
+
+                          {/* Biometric Raw Punches */}
+                          <td>
+                            {day.raw_punches && day.raw_punches.length > 0 ? (
+                              <Button 
+                                variant="outline-primary" 
+                                size="sm" 
+                                className="py-1 px-2 d-flex align-items-center gap-1"
+                                onClick={() => handleViewPunches({
+                                  name: selfMonthlyData?.employee?.name || user?.employee?.first_name || 'My Punches',
+                                  job_no: selfMonthlyData?.employee?.job_no || user?.employee?.employee_id || '--',
+                                  date: day.date,
+                                  raw_punches: day.raw_punches
+                                })}
+                                title="Inspect raw biometric timestamps"
+                              >
+                                <FaEye size={12} />
+                                <span>{day.raw_punches.length} punches</span>
+                              </Button>
+                            ) : (
+                              <span className="text-muted small">--</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </div>
+              )}
+            </Card.Body>
+          </Card>
         </div>
       )}
 
