@@ -1,25 +1,59 @@
-name: Deploy to Production
+name: Deploy LMS
 
-on:
-  push:
-    branches: [ dev ] # Change to 'master' if your default branch is master
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
+    on:
+      push:
+        branches:
+          - main
 
-    steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
 
-    - name: Set up SSH Key
-      uses: webfactory/ssh-agent@v0.9.0
-      with:
-        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+    jobs:
+      deploy:
+        runs-on: ubuntu-24.04
 
-    - name: Run Deployment Script on Server
-      env:
-        SERVER_IP: ${{ secrets.SERVER_IP }}
-        SSH_USER: ${{ secrets.SSH_USER }}
-      run: |
-        ssh -o StrictHostKeyChecking=no $SSH_USER@$SERVER_IP "/var/www/parakshtech-lms/deploy.sh"
+
+        steps:
+          - name: Deploy to Server
+            uses: appleboy/ssh-action@v1.2.0
+            with:
+              host: 173.212.235.87
+              username: root
+              password: ${{ secrets.SERVER_PASSWORD }}
+              port: 22
+              script_stop: true
+
+
+              script: |
+                set -e
+
+
+                echo "===== SERVER ====="
+                hostname
+
+
+                echo "===== PROJECT ====="
+                cd /var/www/parakshtech-lms
+                pwd
+
+
+                echo "===== GIT STATUS ====="
+                git status
+
+
+                echo "===== PULLING LATEST CODE ====="
+                git pull origin main
+
+
+                echo "===== INSTALLING DEPENDENCIES ====="
+                npm ci
+
+
+                echo "===== BUILDING APPLICATION ====="
+                npm run build
+
+
+                echo "===== BUILD OUTPUT ====="
+                ls -lah
+
+
+                echo "===== DEPLOYMENT COMPLETED ====="
