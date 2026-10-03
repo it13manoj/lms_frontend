@@ -36,7 +36,7 @@ jobs:
             git pull origin dev
 
             echo "===== INSTALLING DEPENDENCIES ====="
-            npm ci
+            npm install
 
             echo "===== BUILDING APPLICATION ====="
             npm run build
