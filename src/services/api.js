@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Use environment variable or fallback to localhost
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_URL = process.env.REACT_APP_API_URL || 'https://lms.parakshtech.com/api';
 
 const api = axios.create({
   baseURL: API_URL,
