@@ -15,7 +15,7 @@ jobs:
         with:
           host: 173.212.235.87
           username: root
-          password: 11IT13manoj
+          password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
           script_stop: true
 
