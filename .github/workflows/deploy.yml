@@ -1,59 +1,47 @@
 name: Deploy LMS
 
+on:
+  push:
+    branches:
+      - dev
 
-    on:
-      push:
-        branches:
-          - dev
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
 
+    steps:
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: 173.212.235.87
+          username: root
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          script_stop: true
 
-    jobs:
-      deploy:
-        runs-on: ubuntu-24.04
+          script: |
+            set -e
 
+            echo "===== SERVER ====="
+            hostname
 
-        steps:
-          - name: Deploy to Server
-            uses: appleboy/ssh-action@v1.2.0
-            with:
-              host: 173.212.235.87
-              username: root
-              password: ${{ secrets.SERVER_PASSWORD }}
-              port: 22
-              script_stop: true
+            echo "===== PROJECT ====="
+            cd /var/www/parakshtech-lms
+            pwd
 
+            echo "===== GIT STATUS ====="
+            git status
 
-              script: |
-                set -e
+            echo "===== PULLING LATEST CODE ====="
+            git pull origin dev
 
+            echo "===== INSTALLING DEPENDENCIES ====="
+            npm ci
 
-                echo "===== SERVER ====="
-                hostname
+            echo "===== BUILDING APPLICATION ====="
+            npm run build
 
+            echo "===== BUILD OUTPUT ====="
+            ls -lah
 
-                echo "===== PROJECT ====="
-                cd /var/www/parakshtech-lms
-                pwd
-
-
-                echo "===== GIT STATUS ====="
-                git status
-
-
-                echo "===== PULLING LATEST CODE ====="
-                git pull origin main
-
-
-                echo "===== INSTALLING DEPENDENCIES ====="
-                npm ci
-
-
-                echo "===== BUILDING APPLICATION ====="
-                npm run build
-
-
-                echo "===== BUILD OUTPUT ====="
-                ls -lah
-
-
-                echo "===== DEPLOYMENT COMPLETED ====="
+            echo "===== DEPLOYMENT COMPLETED ====="
