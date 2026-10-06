@@ -575,86 +575,50 @@ const SalarySlip = () => {
                 </Row>
               </div>
 
-              {/* Attendance & Leave Summary Box (Screen Only, Hidden in PDF / Print) */}
-              <div className="attendance-policy-banner no-print p-3 rounded-3 mb-4">
-                <div className="d-flex justify-content-between align-items-center mb-2">
-                  <h6 className="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
-                    <FaCalculator className="text-primary" />
-                    <span>Attendance & Leave Record Summary</span>
-                  </h6>
-                  <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1 small">
-                    ✓ Sundays & 1 Paid Leave Included in Salary
+              {/* Formal Attendance, Leaves & Paid Days Statement (Compact for Single-Page PDF) */}
+              <div className="attendance-statement-section mb-3">
+                <Table bordered size="sm" className="attendance-statement-table text-center mb-0 align-middle">
+                  <thead className="table-light">
+                    <tr style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                      <th style={{ width: '11%' }}>Calendar Days</th>
+                      <th style={{ width: '11%' }}>Working Days</th>
+                      <th style={{ width: '11%' }} className="text-success">Present Days</th>
+                      <th style={{ width: '11%' }} className="text-info">Sundays (Paid)</th>
+                      {salaryData.attendance?.holidayDays > 0 && (
+                        <th style={{ width: '11%' }} className="text-info">Holidays</th>
+                      )}
+                      <th style={{ width: '11%' }} className="text-secondary">Total Absents</th>
+                      <th style={{ width: '14%' }} className="text-warning">Paid Leave (Allowed 1)</th>
+                      <th style={{ width: '11%' }} className="text-danger">Unpaid LOP Days</th>
+                      <th style={{ width: '14%' }} className="bg-success bg-opacity-10 text-success fw-bold">TOTAL PAID DAYS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="fw-semibold" style={{ fontSize: '12px' }}>
+                      <td>{salaryData.attendance?.totalDays}</td>
+                      <td>{salaryData.attendance?.workingDays}</td>
+                      <td className="text-success fw-bold">{salaryData.attendance?.presentDays}</td>
+                      <td className="text-info">{salaryData.attendance?.weekendDays} <small className="text-muted fw-normal">(100% Paid)</small></td>
+                      {salaryData.attendance?.holidayDays > 0 && (
+                        <td className="text-info">{salaryData.attendance?.holidayDays}</td>
+                      )}
+                      <td className="text-secondary">{salaryData.attendance?.absentDays}</td>
+                      <td className="text-warning">{salaryData.attendance?.paidLeavesUsed} / 1 <small className="text-success fw-normal">(₹0 Deduct)</small></td>
+                      <td className="text-danger fw-bold">{salaryData.attendance?.unpaidAbsentDays}</td>
+                      <td className="bg-success bg-opacity-10 text-success fw-bold fs-6">
+                        {salaryData.attendance?.totalPaidDays || (salaryData.attendance?.totalDays - (salaryData.attendance?.unpaidAbsentDays || 0))} Days
+                      </td>
+                    </tr>
+                  </tbody>
+                </Table>
+                <div className="d-flex justify-content-between align-items-center mt-1 px-1" style={{ fontSize: '11px' }}>
+                  <span className="text-muted">
+                    • <strong>Policy</strong>: 1 Paid Leave per month allowed • Sundays are fully paid • Deductions apply only to unpaid loss of pay (LOP) days.
+                  </span>
+                  <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-0">
+                    ✓ Sundays & 1 Paid Leave Included
                   </span>
                 </div>
-                <Row className="g-2 text-center">
-                  <Col xs={6} sm={4} md={true}>
-                    <div className="att-pill bg-white border rounded p-2 h-100">
-                      <div className="text-muted" style={{ fontSize: '11px' }}>Total Days</div>
-                      <div className="fw-bold fs-6">{salaryData.attendance?.totalDays}</div>
-                      <div className="text-muted" style={{ fontSize: '10px' }}>Month calendar</div>
-                    </div>
-                  </Col>
-                  <Col xs={6} sm={4} md={true}>
-                    <div className="att-pill bg-white border rounded p-2 h-100">
-                      <div className="text-muted" style={{ fontSize: '11px' }}>Working Days</div>
-                      <div className="fw-bold fs-6 text-primary">{salaryData.attendance?.workingDays}</div>
-                      <div className="text-muted" style={{ fontSize: '10px' }}>Excl. Sun/Holidays</div>
-                    </div>
-                  </Col>
-                  <Col xs={6} sm={4} md={true}>
-                    <div className="att-pill bg-white border rounded p-2 h-100">
-                      <div className="text-muted" style={{ fontSize: '11px' }}>Present Days</div>
-                      <div className="fw-bold fs-6 text-success">{salaryData.attendance?.presentDays}</div>
-                      <div className="text-muted" style={{ fontSize: '10px' }}>Punched (Paid)</div>
-                    </div>
-                  </Col>
-                  <Col xs={6} sm={4} md={true}>
-                    <div className="att-pill bg-white border rounded p-2 h-100">
-                      <div className="text-muted" style={{ fontSize: '11px' }}>Sundays (Weekly Off)</div>
-                      <div className="fw-bold fs-6 text-info">{salaryData.attendance?.weekendDays}</div>
-                      <div className="text-success fw-semibold" style={{ fontSize: '10px' }}>✓ Paid in Salary</div>
-                    </div>
-                  </Col>
-                  {salaryData.attendance?.holidayDays > 0 && (
-                    <Col xs={6} sm={4} md={true}>
-                      <div className="att-pill bg-white border rounded p-2 h-100">
-                        <div className="text-muted" style={{ fontSize: '11px' }}>Holidays</div>
-                        <div className="fw-bold fs-6 text-info">{salaryData.attendance?.holidayDays}</div>
-                        <div className="text-success fw-semibold" style={{ fontSize: '10px' }}>✓ Paid</div>
-                      </div>
-                    </Col>
-                  )}
-                  <Col xs={6} sm={4} md={true}>
-                    <div className="att-pill bg-white border rounded p-2 h-100">
-                      <div className="text-muted" style={{ fontSize: '11px' }}>Total Absents</div>
-                      <div className="fw-bold fs-6 text-secondary">{salaryData.attendance?.absentDays}</div>
-                      <div className="text-muted" style={{ fontSize: '10px' }}>Working days</div>
-                    </div>
-                  </Col>
-                  <Col xs={6} sm={4} md={true}>
-                    <div className="att-pill bg-white border rounded p-2 h-100">
-                      <div className="text-muted" style={{ fontSize: '11px' }}>Paid Leave (1 max)</div>
-                      <div className="fw-bold fs-6 text-warning">{salaryData.attendance?.paidLeavesUsed}</div>
-                      <div className="text-success fw-semibold" style={{ fontSize: '10px' }}>✓ ₹0 Deduction</div>
-                    </div>
-                  </Col>
-                  <Col xs={6} sm={4} md={true}>
-                    <div className="att-pill bg-white border rounded p-2 h-100">
-                      <div className="text-muted" style={{ fontSize: '11px' }}>Unpaid LOP Days</div>
-                      <div className="fw-bold fs-6 text-danger">{salaryData.attendance?.unpaidAbsentDays}</div>
-                      <div className="text-danger fw-semibold" style={{ fontSize: '10px' }}>Deducted</div>
-                    </div>
-                  </Col>
-                  <Col xs={12} sm={4} md={true}>
-                    <div className="att-pill bg-success bg-opacity-10 border border-success rounded p-2 h-100">
-                      <div className="text-success small fw-bold" style={{ fontSize: '11px' }}>TOTAL PAID DAYS</div>
-                      <div className="fw-bold fs-6 text-success">
-                        {salaryData.attendance?.totalPaidDays || (salaryData.attendance?.totalDays - (salaryData.attendance?.unpaidAbsentDays || 0))}
-                      </div>
-                      <div className="text-muted" style={{ fontSize: '10px' }}>Present+Sun+PL</div>
-                    </div>
-                  </Col>
-                </Row>
               </div>
 
               {/* Earnings & Deductions Comparison Table */}

@@ -138,17 +138,39 @@
     --bs-gutter-y: 6px !important;
   }
 
+  /* Attendance & Leave Statement Table in Print */
+  .attendance-statement-section {
+    margin-bottom: 10px !important;
+  }
+
+  .attendance-statement-table {
+    border-color: #cbd5e1 !important;
+  }
+
+  .attendance-statement-table th {
+    padding: 4px 6px !important;
+    font-size: 8pt !important;
+    background-color: #f8fafc !important;
+    border-color: #cbd5e1 !important;
+  }
+
+  .attendance-statement-table td {
+    padding: 5px 6px !important;
+    font-size: 8.5pt !important;
+    border-color: #cbd5e1 !important;
+  }
+
   .salary-breakdown-table {
     border-color: #cbd5e1 !important;
-    margin-bottom: 12px !important;
+    margin-bottom: 10px !important;
   }
 
   .salary-breakdown-table th,
   .salary-breakdown-table td {
-    padding: 6px 10px !important;
-    font-size: 9pt !important;
+    padding: 5px 8px !important;
+    font-size: 8.5pt !important;
     border-color: #cbd5e1 !important;
-    line-height: 1.25 !important;
+    line-height: 1.2 !important;
   }
 
   .net-salary-highlight-box {
