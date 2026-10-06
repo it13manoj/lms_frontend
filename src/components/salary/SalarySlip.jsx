@@ -64,6 +64,17 @@ const SalarySlip = () => {
     fetchSalarySlip(selectedEmployeeId, selectedYear, selectedMonth);
   }, [selectedEmployeeId, selectedYear, selectedMonth]);
 
+  // Keep document title synced for browser print / Save as PDF default filename (salary_month name)
+  useEffect(() => {
+    if (salaryData?.monthName) {
+      const monthFormatted = salaryData.monthName.trim().replace(/\s+/g, '_');
+      document.title = `salary_${monthFormatted}`;
+    }
+    return () => {
+      document.title = 'LMS - Learning Management System';
+    };
+  }, [salaryData]);
+
   const fetchSalarySlip = async (empId, yr, mo) => {
     try {
       setLoading(true);
@@ -124,7 +135,19 @@ const SalarySlip = () => {
   };
 
   const handlePrint = () => {
+    const originalTitle = document.title;
+    const monthFormatted = salaryData?.monthName
+      ? salaryData.monthName.trim().replace(/\s+/g, '_')
+      : `${selectedMonth}_${selectedYear}`;
+    document.title = `salary_${monthFormatted}`;
     window.print();
+    setTimeout(() => {
+      if (salaryData?.monthName) {
+        document.title = `salary_${monthFormatted}`;
+      } else {
+        document.title = originalTitle;
+      }
+    }, 1500);
   };
 
   // Save / Finalize Salary to Database (Admin/HR)
@@ -518,11 +541,11 @@ const SalarySlip = () => {
                 </div>
 
                 <div className="text-end">
-                  <div className="payslip-title-label fw-bold text-primary" style={{ fontSize: '15px', letterSpacing: '0.5px' }}>
+                  <div className="no-print d-print-none payslip-title-label fw-bold text-primary" style={{ fontSize: '15px', letterSpacing: '0.5px' }}>
                     SALARY PAYSLIP
                   </div>
-                  <div className="fw-bold fs-5 text-dark">{salaryData.monthName}</div>
-                  <div>
+                  <div className="fw-bold fs-5 text-dark payslip-month-title">{salaryData.monthName}</div>
+                  <div className="no-print d-print-none">
                     <Badge 
                       bg={salaryData.status === 'paid' ? 'success' : salaryData.status === 'approved' ? 'info' : 'warning'}
                       className="text-uppercase py-1 px-3 mt-1"

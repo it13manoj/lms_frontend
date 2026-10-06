@@ -68,10 +68,7 @@
 @media print {
   @page {
     size: A4 portrait;
-    margin-top: 2px !important;
-    margin-bottom: 8mm !important;
-    margin-left: 10mm !important;
-    margin-right: 10mm !important;
+    margin: 2px 8mm 6mm 8mm;
   }
 
   html, body {
@@ -80,12 +77,11 @@
     font-size: 10pt !important;
     margin: 0 !important;
     padding: 0 !important;
-    padding-top: 2px !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Completely hide app frame, sidebar, navbar, action buttons, notifications, policy text */
+  /* Completely hide app frame, sidebar, navbar, action buttons, notifications, and payslip button/badge */
   .no-print,
   .sidebar,
   .navbar,
@@ -95,16 +91,29 @@
   .toast,
   .toast-container,
   .modal,
-  .alert {
+  .alert,
+  .payslip-title-label,
+  .company-header-row .badge,
+  .company-header-row .text-end .badge {
     display: none !important;
   }
 
+  /* Reset outer layout containers to remove any blank gap above header */
+  #root,
+  .App,
+  .main-layout,
+  .main-content,
+  .main-content.sidebar-open,
+  .main-content.sidebar-closed,
+  .content-wrapper,
   .salary-slip-container {
-    padding: 0 !important;
     margin: 0 !important;
-    padding-top: 2px !important;
+    padding: 0 !important;
     background: #ffffff !important;
     min-height: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    border: none !important;
   }
 
   .salary-slip-card {
@@ -118,16 +127,29 @@
     page-break-inside: avoid !important;
   }
 
-  .card-body {
+  .salary-slip-card > .card-body,
+  .salary-slip-card .card-body,
+  .salary-slip-card .p-4,
+  .salary-slip-card .p-md-5 {
     padding: 0 !important;
     padding-top: 2px !important;
+    margin: 0 !important;
   }
 
   /* Company Header Compact Spacing */
   .company-header-row {
-    padding-bottom: 8px !important;
-    margin-bottom: 10px !important;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 6px !important;
+    margin-bottom: 8px !important;
     border-bottom: 1.5px solid #1e3a8a !important;
+  }
+
+  .payslip-month-title {
+    font-size: 13pt !important;
+    font-weight: 700 !important;
+    color: #1e3a8a !important;
+    margin: 0 !important;
   }
 
   .company-name-title {
