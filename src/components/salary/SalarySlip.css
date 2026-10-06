@@ -68,7 +68,10 @@
 @media print {
   @page {
     size: A4 portrait;
-    margin: 8mm 10mm;
+    margin-top: 2px !important;
+    margin-bottom: 8mm !important;
+    margin-left: 10mm !important;
+    margin-right: 10mm !important;
   }
 
   html, body {
@@ -77,6 +80,7 @@
     font-size: 10pt !important;
     margin: 0 !important;
     padding: 0 !important;
+    padding-top: 2px !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
@@ -98,6 +102,7 @@
   .salary-slip-container {
     padding: 0 !important;
     margin: 0 !important;
+    padding-top: 2px !important;
     background: #ffffff !important;
     min-height: auto !important;
   }
@@ -115,17 +120,33 @@
 
   .card-body {
     padding: 0 !important;
+    padding-top: 2px !important;
   }
 
   /* Company Header Compact Spacing */
+  .company-header-row {
+    padding-bottom: 8px !important;
+    margin-bottom: 10px !important;
+    border-bottom: 1.5px solid #1e3a8a !important;
+  }
+
+  .company-name-title {
+    font-size: 16pt !important;
+    margin-bottom: 2px !important;
+  }
+
+  .contact-details-line {
+    font-size: 8.5pt !important;
+  }
+
   .company-logo-badge {
-    width: 44px !important;
-    height: 44px !important;
+    width: 40px !important;
+    height: 40px !important;
   }
 
   .company-logo-badge svg {
-    width: 24px !important;
-    height: 24px !important;
+    width: 22px !important;
+    height: 22px !important;
   }
 
   /* Employee Details Grid Compact Spacing */

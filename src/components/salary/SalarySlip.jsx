@@ -502,24 +502,23 @@ const SalarySlip = () => {
             <Card.Body className="p-4 p-md-5">
               
               {/* Company Header */}
-              <div className="d-flex justify-content-between align-items-start border-bottom pb-4 mb-4">
+              <div className="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3 company-header-row">
                 <div className="d-flex align-items-center gap-3">
                   <div className="company-logo-badge">
-                    <FaBuilding size={32} />
+                    <FaBuilding size={28} />
                   </div>
                   <div>
-                    <h3 className="fw-bold mb-1 text-dark">PARAKSH TECHNOLOGIES</h3>
-                    <div className="text-muted small">
-                      Learning Management System & Corporate Operations
-                    </div>
-                    <div className="text-muted" style={{ fontSize: '12px' }}>
-                      GSTIN / Reg No: 07AAECP1234F1Z8 • contact@parakshtech.com
+                    <h3 className="fw-bold mb-1 text-dark company-name-title">PARAKSH TECHNOLOGIES</h3>
+                    <div className="text-muted small contact-details-line" style={{ fontSize: '12px' }}>
+                      <span>Email: <strong className="text-dark">hr@parakshtech.com</strong></span>
+                      <span className="mx-2">•</span>
+                      <span>Website: <strong className="text-dark">www.parakshtech.com</strong></span>
                     </div>
                   </div>
                 </div>
 
                 <div className="text-end">
-                  <div className="badge bg-primary fs-6 px-3 py-2 mb-2">
+                  <div className="payslip-title-label fw-bold text-primary" style={{ fontSize: '15px', letterSpacing: '0.5px' }}>
                     SALARY PAYSLIP
                   </div>
                   <div className="fw-bold fs-5 text-dark">{salaryData.monthName}</div>
