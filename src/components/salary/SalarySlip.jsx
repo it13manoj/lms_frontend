@@ -774,25 +774,6 @@ const SalarySlip = () => {
                 </div>
               )}
 
-              {/* Signatures Area */}
-              <div className="signatures-wrapper pt-4 mt-4 border-top">
-                <Row className="text-center">
-                  <Col xs={6}>
-                    <div className="signature-line mx-auto mb-2" style={{ maxWidth: '200px', borderBottom: '1px dashed #666', height: '40px' }}></div>
-                    <div className="fw-bold small">EMPLOYEE SIGNATURE</div>
-                    <div className="text-muted" style={{ fontSize: '11px' }}>({salaryData.employee?.name})</div>
-                  </Col>
-                  <Col xs={6}>
-                    <div className="signature-line mx-auto mb-2" style={{ maxWidth: '200px', borderBottom: '1px dashed #666', height: '40px' }}></div>
-                    <div className="fw-bold small">AUTHORIZED SIGNATORY</div>
-                    <div className="text-muted" style={{ fontSize: '11px' }}>Human Resources & Payroll Dept</div>
-                  </Col>
-                </Row>
-                <div className="text-center text-muted mt-4" style={{ fontSize: '11px' }}>
-                  This is a system-generated document based on biometric machine punch records and HR policy rules.
-                </div>
-              </div>
-
             </Card.Body>
           </Card>
         </>
