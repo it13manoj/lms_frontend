@@ -64,15 +64,24 @@
   letter-spacing: -0.5px;
 }
 
-/* Print Optimization */
+/* Print & PDF Optimization */
 @media print {
-  body {
-    background: #ffffff !important;
-    color: #000000 !important;
-    font-size: 12pt;
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm;
   }
 
-  /* Hide navigation, sidebar, top controls, buttons */
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Completely hide app frame, sidebar, navbar, action buttons, notifications */
   .no-print,
   .sidebar,
   .navbar,
@@ -80,14 +89,17 @@
   footer,
   .btn,
   .toast,
-  .modal {
+  .toast-container,
+  .modal,
+  .alert {
     display: none !important;
   }
 
   .salary-slip-container {
     padding: 0 !important;
     margin: 0 !important;
-    background: transparent !important;
+    background: #ffffff !important;
+    min-height: auto !important;
   }
 
   .salary-slip-card {
@@ -97,26 +109,46 @@
     padding: 0 !important;
     box-shadow: none !important;
     border: none !important;
-    page-break-inside: avoid;
+    background: #ffffff !important;
+    page-break-inside: avoid !important;
   }
 
   .card-body {
     padding: 0 !important;
   }
 
-  /* Force background colors and borders in print */
+  /* Crisp borders and backgrounds */
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
+  .salary-breakdown-table {
+    border-color: #cbd5e1 !important;
+  }
+
+  .salary-breakdown-table th,
+  .salary-breakdown-table td {
+    padding: 8px 12px !important;
+    font-size: 10pt !important;
+    border-color: #cbd5e1 !important;
+  }
+
   .net-salary-highlight-box {
     border: 2px solid #16a34a !important;
     background-color: #f0fdf4 !important;
+    padding: 16px !important;
+    margin-bottom: 20px !important;
+    page-break-inside: avoid !important;
   }
 
+  .net-salary-highlight-box .display-6 {
+    font-size: 1.8rem !important;
+  }
 
   .signatures-wrapper {
-    margin-top: 40px !important;
+    margin-top: 35px !important;
+    padding-top: 20px !important;
+    page-break-inside: avoid !important;
   }
 }
