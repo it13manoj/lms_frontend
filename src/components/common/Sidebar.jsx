@@ -97,8 +97,12 @@ const handleLogout = (e) => {
         { 
           path: '/salary', 
           icon: <FaMoneyBillWave />, 
-          label: 'Salary',
-          allowedRoles: ['admin', 'hr', 'manager', 'employee']
+          label: 'Salary & Payroll',
+          allowedRoles: ['admin', 'hr', 'manager', 'employee'],
+          subMenus: [
+            { path: '/salary', label: 'Salary Slip & Approval' },
+            { path: '/salary/history', label: 'Payroll History' }
+          ]
         },
         { 
           path: '/policies', 
@@ -153,8 +157,12 @@ const handleLogout = (e) => {
         { 
           path: '/salary', 
           icon: <FaMoneyBillWave />, 
-          label: 'Salary',
-          allowedRoles: ['admin', 'hr', 'manager', 'employee']
+          label: 'Salary & Payroll',
+          allowedRoles: ['admin', 'hr', 'manager', 'employee'],
+          subMenus: [
+            { path: '/salary', label: 'Salary Slip & Approval' },
+            { path: '/salary/history', label: 'Payroll History' }
+          ]
         },
         { 
           path: '/policies', 

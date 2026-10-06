@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Modal, Button, Table, Badge, Row, Col, 
   Spinner, Alert, Form, InputGroup, ProgressBar, Card 
@@ -7,7 +8,8 @@ import {
   FaCalendarAlt, FaCalendarDay, FaClock, FaUserCheck, 
   FaUserTimes, FaExclamationTriangle, FaDoorOpen, FaCheckCircle, 
   FaFileDownload, FaSearch, FaChevronLeft, FaChevronRight, 
-  FaBusinessTime, FaEye, FaTimesCircle, FaBuilding, FaUserTie 
+  FaBusinessTime, FaEye, FaTimesCircle, FaBuilding, FaUserTie,
+  FaMoneyBillWave
 } from 'react-icons/fa';
 import api from '../../services/api';
 
@@ -17,6 +19,7 @@ const MONTH_NAMES = [
 ];
 
 const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches }) => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [attendanceData, setAttendanceData] = useState(null);
@@ -181,6 +184,21 @@ const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches }) => {
                 <FaBusinessTime />
                 <span>Office: 09:30 AM – 06:30 PM</span>
               </span>
+              <Button 
+                variant="primary" 
+                size="sm" 
+                className="d-flex align-items-center gap-2 shadow-sm"
+                onClick={() => {
+                  const empId = attendanceData?.employee?.id || employee?.id || employee?.employee_id;
+                  const mo = selectedMonth === 'all' ? 9 : selectedMonth;
+                  onHide();
+                  navigate(`/salary?employeeId=${empId}&year=${selectedYear}&month=${mo}`);
+                }}
+                title="View & manage monthly salary slip for this employee"
+              >
+                <FaMoneyBillWave />
+                <span>Check Salary Slip</span>
+              </Button>
               <Button 
                 variant="outline-secondary" 
                 size="sm" 

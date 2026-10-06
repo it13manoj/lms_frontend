@@ -319,6 +319,11 @@ const EmployeeList = () => {
                         </Link>
                         {isAdminOrHR && (
                           <>
+                            <Link to={`/salary?employeeId=${employee.id}`}>
+                              <Button variant="outline-success" size="sm" title="Check & Approve Salary">
+                                <FaMoneyBillWave />
+                              </Button>
+                            </Link>
                             <Button 
                               variant="outline-primary" 
                               size="sm"

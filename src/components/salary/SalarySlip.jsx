@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Card, Row, Col, Table, Badge, Button, 
   Spinner, Alert, Form, Modal 
@@ -20,12 +21,17 @@ const MONTH_NAMES = [
 
 const SalarySlip = () => {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isAdminOrHR = user?.role === 'admin' || user?.role === 'hr' || user?.role === 'manager';
 
   const now = new Date();
-  const [selectedYear, setSelectedYear] = useState(2026);
-  const [selectedMonth, setSelectedMonth] = useState(9); // Default to September 2026 (completed attendance month)
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const paramYear = searchParams.get('year') ? parseInt(searchParams.get('year'), 10) : 2026;
+  const paramMonth = searchParams.get('month') ? parseInt(searchParams.get('month'), 10) : 9;
+  const paramEmpId = searchParams.get('employeeId') || '';
+
+  const [selectedYear, setSelectedYear] = useState(paramYear);
+  const [selectedMonth, setSelectedMonth] = useState(paramMonth);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(paramEmpId);
   
   const [salaryData, setSalaryData] = useState(null);
   const [employeesList, setEmployeesList] = useState([]);
@@ -42,6 +48,16 @@ const SalarySlip = () => {
   const [paymentStatus, setPaymentStatus] = useState('pending');
   const [notes, setNotes] = useState('');
   const [savingSalary, setSavingSalary] = useState(false);
+
+  // Sync state if URL query params change
+  useEffect(() => {
+    const qEmpId = searchParams.get('employeeId');
+    const qYear = searchParams.get('year');
+    const qMonth = searchParams.get('month');
+    if (qEmpId && qEmpId !== selectedEmployeeId) setSelectedEmployeeId(qEmpId);
+    if (qYear && parseInt(qYear, 10) !== selectedYear) setSelectedYear(parseInt(qYear, 10));
+    if (qMonth && parseInt(qMonth, 10) !== selectedMonth) setSelectedMonth(parseInt(qMonth, 10));
+  }, [searchParams]);
 
   // Initial load
   useEffect(() => {

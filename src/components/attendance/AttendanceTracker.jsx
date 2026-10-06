@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Card, Button, Table, Badge, Row, Col, 
   Spinner, Alert, Form, InputGroup, Nav, ProgressBar 
@@ -9,7 +10,7 @@ import {
   FaUserCheck, FaUserTimes, FaExclamationTriangle,
   FaSearch, FaChevronLeft, FaChevronRight, FaFileDownload,
   FaEye, FaBuilding, FaUserTie, FaHistory, FaCalendarDay,
-  FaBusinessTime, FaDoorOpen, FaCalendarAlt
+  FaBusinessTime, FaDoorOpen, FaCalendarAlt, FaMoneyBillWave
 } from 'react-icons/fa';
 import {
   Chart as ChartJS,
@@ -49,6 +50,7 @@ const MONTH_NAMES = [
 
 const AttendanceTracker = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const isAdminOrHR = user?.role === 'admin' || user?.role === 'hr' || user?.role === 'manager';
 
   // Navigation tabs: Defaults to 'panel' for Admin/HR, 'self' for regular employees
@@ -734,7 +736,7 @@ const AttendanceTracker = () => {
                         <th>Check-In (Office: 09:30 AM)</th>
                         <th>Check-Out (Office: 06:30 PM)</th>
                         <th>Working Hours</th>
-                        <th>Punch Logs</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -862,22 +864,41 @@ const AttendanceTracker = () => {
                             )}
                           </td>
 
-                          {/* Action / Punch Details */}
+                          {/* Actions: Punch Details & Salary Slip */}
                           <td>
-                            {record.raw_punches && record.raw_punches.length > 0 ? (
-                              <Button 
-                                variant="outline-primary" 
-                                size="sm" 
-                                className="py-1 px-2 d-flex align-items-center gap-1"
-                                onClick={() => handleViewPunches(record)}
-                                title="View raw punch logs"
-                              >
-                                <FaEye size={12} />
-                                <span>{record.raw_punches.length} punches</span>
-                              </Button>
-                            ) : (
-                              <span className="text-muted small">No punches</span>
-                            )}
+                            <div className="d-flex align-items-center gap-1">
+                              {record.raw_punches && record.raw_punches.length > 0 ? (
+                                <Button 
+                                  variant="outline-primary" 
+                                  size="sm" 
+                                  className="py-1 px-2 d-flex align-items-center gap-1"
+                                  onClick={() => handleViewPunches(record)}
+                                  title="View raw punch logs"
+                                >
+                                  <FaEye size={12} />
+                                  <span>{record.raw_punches.length} punches</span>
+                                </Button>
+                              ) : (
+                                <span className="text-muted small me-1">No punches</span>
+                              )}
+
+                              {isAdminOrHR && (
+                                <Button 
+                                  variant="outline-success" 
+                                  size="sm" 
+                                  className="py-1 px-2 d-flex align-items-center gap-1"
+                                  onClick={() => {
+                                    const yr = selectedDate ? selectedDate.substring(0, 4) : 2026;
+                                    const mo = selectedDate ? parseInt(selectedDate.substring(5, 7), 10) : 9;
+                                    navigate(`/salary?employeeId=${record.employee_id || record.id}&year=${yr}&month=${mo}`);
+                                  }}
+                                  title="Check & approve salary for this employee"
+                                >
+                                  <FaMoneyBillWave size={12} />
+                                  <span>Salary</span>
+                                </Button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
