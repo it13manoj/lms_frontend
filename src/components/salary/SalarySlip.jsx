@@ -752,8 +752,8 @@ const SalarySlip = () => {
                 </div>
               </div>
 
-              {/* Deduction Policy Explanation (Screen Only, Hidden in PDF / Print) */}
-              <div className="bg-light no-print p-3 rounded border mb-4">
+              {/* Payroll Calculation, Sunday Pay & Leave Policy Formula (Included in Screen & PDF) */}
+              <div className="bg-light payroll-policy-formula-section p-3 rounded border mb-4">
                 <h6 className="fw-bold mb-1 small text-dark d-flex align-items-center gap-1">
                   <FaMoneyBillWave className="text-primary" />
                   <span>Payroll Calculation, Sunday Pay & Leave Policy Formula:</span>
