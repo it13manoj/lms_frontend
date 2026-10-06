@@ -575,8 +575,8 @@ const SalarySlip = () => {
                 </Row>
               </div>
 
-              {/* Attendance & Leave Summary Box */}
-              <div className="attendance-policy-banner p-3 rounded-3 mb-4">
+              {/* Attendance & Leave Summary Box (Screen Only, Hidden in PDF / Print) */}
+              <div className="attendance-policy-banner no-print p-3 rounded-3 mb-4">
                 <div className="d-flex justify-content-between align-items-center mb-2">
                   <h6 className="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
                     <FaCalculator className="text-primary" />
