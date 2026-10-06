@@ -546,10 +546,10 @@ const EmployeeList = () => {
                       <Field 
                         type="number" 
                         name="salary" 
-                        className="form-control"
-                        placeholder="Enter salary amount"
-                        min="0"
-                        step="100"
+                        className="form-control" 
+                        placeholder="Enter salary amount (e.g. 50000.00)" 
+                        min="0" 
+                        step="0.01" 
                       />
                       <ErrorMessage name="salary" component="div" className="text-danger" />
                     </Form.Group>

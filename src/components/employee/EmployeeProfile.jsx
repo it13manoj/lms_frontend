@@ -27,16 +27,19 @@ const EmployeeProfile = () => {
   const fetchEmployeeData = async () => {
     try {
       setLoading(true);
-      const [employeeRes, leaveRes, attendanceRes] = await Promise.all([
-        api.get(`/employees/${id}`),
-        api.get(`/employees/${id}/leaves`),
-        api.get(`/employees/${id}/attendance`)
-      ]);
+      setError('');
+      const employeeRes = await api.get(`/employees/${id}`);
       setEmployee(employeeRes.data.data);
-      setLeaveHistory(leaveRes.data.data || []);
-      setAttendanceHistory(attendanceRes.data.data || []);
+
+      // Fetch leaves and attendance safely (don't fail profile if empty)
+      const [leaveRes, attendanceRes] = await Promise.all([
+        api.get(`/employees/${id}/leaves`).catch(() => ({ data: { data: [] } })),
+        api.get(`/employees/${id}/attendance`).catch(() => ({ data: { data: [] } }))
+      ]);
+      setLeaveHistory(leaveRes.data?.data || []);
+      setAttendanceHistory(attendanceRes.data?.data || []);
     } catch (error) {
-      setError('Failed to fetch employee data');
+      setError(error.response?.data?.message || 'Failed to fetch employee data');
       console.error(error);
     } finally {
       setLoading(false);
@@ -61,10 +64,16 @@ const EmployeeProfile = () => {
 
   return (
     <div className="employee-profile">
-      <Link to="/employees" className="btn btn-outline-secondary mb-4">
-        <FaArrowLeft className="me-2" />
-        Back to Employees
-      </Link>
+      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <Link to="/employees" className="btn btn-outline-secondary">
+          <FaArrowLeft className="me-2" />
+          Back to Employees
+        </Link>
+        <Link to={`/salary/slip?employeeId=${employee.id}`} className="btn btn-primary d-flex align-items-center gap-2 shadow-sm">
+          <FaMoneyBillWave />
+          <span>View Salary Slip</span>
+        </Link>
+      </div>
 
       <Row>
         <Col lg={4}>
@@ -112,7 +121,7 @@ const EmployeeProfile = () => {
                 </ListGroup.Item>
                 <ListGroup.Item>
                   <FaMoneyBillWave className="me-2 text-primary" />
-                  Salary: ${employee.salary?.toLocaleString() || '0'}
+                  Salary: ₹{parseFloat(employee.salary || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </ListGroup.Item>
               </ListGroup>
             </Card.Body>

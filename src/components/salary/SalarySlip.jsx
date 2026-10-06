@@ -23,8 +23,8 @@ const SalarySlip = () => {
   const isAdminOrHR = user?.role === 'admin' || user?.role === 'hr' || user?.role === 'manager';
 
   const now = new Date();
-  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1); // 1-12
+  const [selectedYear, setSelectedYear] = useState(2026);
+  const [selectedMonth, setSelectedMonth] = useState(9); // Default to September 2026 (completed attendance month)
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   
   const [salaryData, setSalaryData] = useState(null);
@@ -142,6 +142,42 @@ const SalarySlip = () => {
     }
   };
 
+  // Approve salary slip (Admin / HR)
+  const handleApproveSalary = async () => {
+    if (!salaryData?.employee?.id) return;
+    try {
+      setLoading(true);
+      if (salaryData?.salaryRecordId) {
+        const res = await api.post(`/salary/approve/${salaryData.salaryRecordId}`);
+        if (res.data && res.data.success) {
+          setActionSuccess('Salary slip APPROVED successfully! Employee can now download and print their salary slip.');
+          fetchSalarySlip(selectedEmployeeId, selectedYear, selectedMonth);
+        }
+      } else {
+        const payload = {
+          employee_id: salaryData.employee.id,
+          year: selectedYear,
+          month: selectedMonth,
+          bonus: parseFloat(customBonus || 0),
+          other_deductions: parseFloat(customOtherDeductions || 0),
+          payment_date: paymentDate,
+          payment_method: paymentMethod,
+          status: 'approved',
+          notes: notes
+        };
+        const res = await api.post('/salary/generate', payload);
+        if (res.data && res.data.success) {
+          setActionSuccess('Salary slip APPROVED successfully! Employee can now download and print their salary slip.');
+          fetchSalarySlip(selectedEmployeeId, selectedYear, selectedMonth);
+        }
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to approve salary');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Quick mark as paid
   const handleMarkAsPaid = async () => {
     if (!salaryData?.salaryRecordId) {
@@ -173,6 +209,8 @@ const SalarySlip = () => {
     return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
+  const isApproved = salaryData?.status === 'approved' || salaryData?.status === 'paid';
+
   return (
     <div className="salary-slip-container container-fluid px-2 px-md-4 py-3">
       {/* Top Controls Bar - Hidden when printing */}
@@ -184,18 +222,43 @@ const SalarySlip = () => {
               <span>Employee Salary Slip</span>
             </h2>
             <div className="text-muted small">
-              Dynamic attendance deductions with 1 Paid Leave policy (Loss of Pay managed per day)
+              Dynamic attendance deductions with Sunday salary paid & 1 Paid Leave policy
             </div>
           </div>
 
           <div className="d-flex flex-wrap align-items-center gap-2">
-            <Button variant="outline-dark" onClick={handlePrint} className="d-flex align-items-center gap-2 shadow-sm">
-              <FaPrint />
-              <span>Print / Download PDF</span>
-            </Button>
+            {/* Download / Print button: Always available to Admin/HR, available to Employees ONLY after Admin Approval */}
+            {isAdminOrHR || isApproved ? (
+              <Button variant="outline-dark" onClick={handlePrint} className="d-flex align-items-center gap-2 shadow-sm">
+                <FaPrint />
+                <span>Print / Download PDF</span>
+              </Button>
+            ) : (
+              <Button 
+                variant="outline-secondary" 
+                disabled 
+                className="d-flex align-items-center gap-2 shadow-sm"
+                title="Salary slip download will be available once approved by Admin / HR"
+              >
+                <FaPrint />
+                <span>Download Locked (Pending Approval)</span>
+              </Button>
+            )}
 
             {isAdminOrHR && (
               <>
+                {!isApproved && (
+                  <Button 
+                    variant="outline-success" 
+                    onClick={handleApproveSalary} 
+                    className="d-flex align-items-center gap-2 shadow-sm"
+                    title="Approve salary slip and unlock download for employee"
+                  >
+                    <FaCheckCircle />
+                    <span>Approve Salary</span>
+                  </Button>
+                )}
+
                 <Button 
                   variant="primary" 
                   onClick={() => setShowSaveModal(true)} 
@@ -316,6 +379,27 @@ const SalarySlip = () => {
         </Alert>
       )}
 
+      {/* Employee Approval Notice Banner */}
+      {!isAdminOrHR && !isApproved && salaryData && (
+        <Alert variant="warning" className="no-print shadow-sm d-flex align-items-center justify-content-between p-3 rounded-3 mb-4">
+          <div className="d-flex align-items-center gap-3">
+            <FaExclamationTriangle className="text-warning fs-3 flex-shrink-0" />
+            <div>
+              <strong className="d-block mb-1">Salary Slip Pending Admin Approval</strong>
+              Your salary slip for {salaryData.monthName} has been generated and is awaiting approval by HR / Admin. Official download and print options will be unlocked once approved.
+            </div>
+          </div>
+          <Badge bg="warning" text="dark" className="text-uppercase px-2 py-1 flex-shrink-0">Pending Approval</Badge>
+        </Alert>
+      )}
+
+      {!isAdminOrHR && isApproved && salaryData && (
+        <Alert variant="success" className="no-print shadow-sm d-flex align-items-center gap-2 py-2 px-3 rounded-3 mb-4">
+          <FaCheckCircle className="text-success" />
+          <span>This salary slip has been <strong>approved by HR/Admin</strong>. You can now download or print your official salary slip.</span>
+        </Alert>
+      )}
+
       {loading ? (
         <div className="text-center py-5">
           <Spinner animation="border" variant="primary" />
@@ -330,50 +414,60 @@ const SalarySlip = () => {
         <>
           {/* Quick Metrics KPI Banner (Screen Only) */}
           <div className="no-print mb-4">
-            <Row className="g-3">
-              <Col xs={6} md={4} lg={2}>
+            <Row className="g-2 g-md-3">
+              <Col xs={6} md={3} lg={true}>
                 <div className="border rounded p-3 text-center bg-white shadow-sm h-100">
                   <div className="text-muted small fw-bold">BASE SALARY</div>
                   <div className="fs-5 fw-bold text-dark mt-1">{formatCurrency(salaryData.salary?.baseSalary)}</div>
-                  <div className="text-muted" style={{ fontSize: '11px' }}>From Profile</div>
+                  <div className="text-muted" style={{ fontSize: '11px' }}>Monthly CTC</div>
                 </div>
               </Col>
 
-              <Col xs={6} md={4} lg={2}>
-                <div className="border rounded p-3 text-center bg-white shadow-sm h-100">
-                  <div className="text-primary small fw-bold">WORKING DAYS</div>
-                  <div className="fs-5 fw-bold text-primary mt-1">{salaryData.attendance?.workingDays || 0}</div>
-                  <div className="text-muted" style={{ fontSize: '11px' }}>of {salaryData.attendance?.totalDays} total days</div>
-                </div>
-              </Col>
-
-              <Col xs={6} md={4} lg={2}>
+              <Col xs={6} md={3} lg={true}>
                 <div className="border rounded p-3 text-center bg-white shadow-sm h-100">
                   <div className="text-success small fw-bold">PRESENT DAYS</div>
                   <div className="fs-5 fw-bold text-success mt-1">{salaryData.attendance?.presentDays || 0}</div>
-                  <div className="text-muted" style={{ fontSize: '11px' }}>Punched days</div>
+                  <div className="text-muted" style={{ fontSize: '11px' }}>Biometric Punches</div>
                 </div>
               </Col>
 
-              <Col xs={6} md={4} lg={2}>
+              <Col xs={6} md={3} lg={true}>
                 <div className="border rounded p-3 text-center bg-white shadow-sm h-100">
-                  <div className="text-warning small fw-bold">PAID LEAVES</div>
+                  <div className="text-info small fw-bold">SUNDAYS (PAID)</div>
+                  <div className="fs-5 fw-bold text-info mt-1">{salaryData.attendance?.weekendDays || 0} Days</div>
+                  <div className="text-muted" style={{ fontSize: '11px' }}>100% Salary Made</div>
+                </div>
+              </Col>
+
+              <Col xs={6} md={3} lg={true}>
+                <div className="border rounded p-3 text-center bg-white shadow-sm h-100">
+                  <div className="text-warning small fw-bold">PAID LEAVE</div>
                   <div className="fs-5 fw-bold text-warning mt-1">{salaryData.attendance?.paidLeavesUsed || 0} / 1</div>
                   <div className="text-muted" style={{ fontSize: '11px' }}>1 Allowed per month</div>
                 </div>
               </Col>
 
-              <Col xs={6} md={4} lg={2}>
+              <Col xs={6} md={3} lg={true}>
+                <div className="border rounded p-3 text-center bg-primary bg-opacity-10 border-primary shadow-sm h-100">
+                  <div className="text-primary small fw-bold">TOTAL PAID DAYS</div>
+                  <div className="fs-5 fw-bold text-primary mt-1">
+                    {salaryData.attendance?.totalPaidDays || (salaryData.attendance?.totalDays - (salaryData.attendance?.unpaidAbsentDays || 0))}
+                  </div>
+                  <div className="text-muted" style={{ fontSize: '11px' }}>of {salaryData.attendance?.totalDays} Calendar Days</div>
+                </div>
+              </Col>
+
+              <Col xs={6} md={3} lg={true}>
                 <div className="border rounded p-3 text-center bg-white shadow-sm h-100">
                   <div className="text-danger small fw-bold">ABSENT DEDUCTION</div>
                   <div className="fs-5 fw-bold text-danger mt-1">-{formatCurrency(salaryData.salary?.absentDeduction)}</div>
                   <div className="text-muted" style={{ fontSize: '11px' }}>
-                    {salaryData.attendance?.unpaidAbsentDays || 0} days @ {formatCurrency(salaryData.salary?.perDaySalary)}/day
+                    {salaryData.attendance?.unpaidAbsentDays || 0} LOP days @ {formatCurrency(salaryData.salary?.perDaySalary)}/day
                   </div>
                 </div>
               </Col>
 
-              <Col xs={6} md={4} lg={2}>
+              <Col xs={12} md={3} lg={true}>
                 <div className="border rounded p-3 text-center bg-success bg-opacity-10 border-success shadow-sm h-100">
                   <div className="text-success small fw-bold">NET SALARY</div>
                   <div className="fs-5 fw-bold text-success mt-1">{formatCurrency(salaryData.salary?.netSalary)}</div>
@@ -415,10 +509,10 @@ const SalarySlip = () => {
                   <div className="fw-bold fs-5 text-dark">{salaryData.monthName}</div>
                   <div>
                     <Badge 
-                      bg={salaryData.status === 'paid' ? 'success' : 'warning'}
+                      bg={salaryData.status === 'paid' ? 'success' : salaryData.status === 'approved' ? 'info' : 'warning'}
                       className="text-uppercase py-1 px-3 mt-1"
                     >
-                      {salaryData.status === 'paid' ? '✓ PAID' : 'PENDING APPROVAL'}
+                      {salaryData.status === 'paid' ? '✓ PAID' : salaryData.status === 'approved' ? '✓ APPROVED' : 'PENDING APPROVAL'}
                     </Badge>
                   </div>
                 </div>
@@ -472,45 +566,76 @@ const SalarySlip = () => {
                     <FaCalculator className="text-primary" />
                     <span>Attendance & Leave Record Summary</span>
                   </h6>
-                  <span className="badge bg-info bg-opacity-25 text-primary border border-info border-opacity-25 px-2 py-1 small">
-                    Policy: 1 Paid Leave Allowed / Month
+                  <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1 small">
+                    ✓ Sundays & 1 Paid Leave Included in Salary
                   </span>
                 </div>
                 <Row className="g-2 text-center">
-                  <Col xs={4} md={2}>
-                    <div className="att-pill bg-white border rounded p-2">
+                  <Col xs={6} sm={4} md={true}>
+                    <div className="att-pill bg-white border rounded p-2 h-100">
                       <div className="text-muted" style={{ fontSize: '11px' }}>Total Days</div>
                       <div className="fw-bold fs-6">{salaryData.attendance?.totalDays}</div>
+                      <div className="text-muted" style={{ fontSize: '10px' }}>Month calendar</div>
                     </div>
                   </Col>
-                  <Col xs={4} md={2}>
-                    <div className="att-pill bg-white border rounded p-2">
+                  <Col xs={6} sm={4} md={true}>
+                    <div className="att-pill bg-white border rounded p-2 h-100">
                       <div className="text-muted" style={{ fontSize: '11px' }}>Working Days</div>
-                      <div className="fw-bold fs-6">{salaryData.attendance?.workingDays}</div>
+                      <div className="fw-bold fs-6 text-primary">{salaryData.attendance?.workingDays}</div>
+                      <div className="text-muted" style={{ fontSize: '10px' }}>Excl. Sun/Holidays</div>
                     </div>
                   </Col>
-                  <Col xs={4} md={2}>
-                    <div className="att-pill bg-white border rounded p-2">
+                  <Col xs={6} sm={4} md={true}>
+                    <div className="att-pill bg-white border rounded p-2 h-100">
                       <div className="text-muted" style={{ fontSize: '11px' }}>Present Days</div>
                       <div className="fw-bold fs-6 text-success">{salaryData.attendance?.presentDays}</div>
+                      <div className="text-muted" style={{ fontSize: '10px' }}>Punched (Paid)</div>
                     </div>
                   </Col>
-                  <Col xs={4} md={2}>
-                    <div className="att-pill bg-white border rounded p-2">
+                  <Col xs={6} sm={4} md={true}>
+                    <div className="att-pill bg-white border rounded p-2 h-100">
+                      <div className="text-muted" style={{ fontSize: '11px' }}>Sundays (Weekly Off)</div>
+                      <div className="fw-bold fs-6 text-info">{salaryData.attendance?.weekendDays}</div>
+                      <div className="text-success fw-semibold" style={{ fontSize: '10px' }}>✓ Paid in Salary</div>
+                    </div>
+                  </Col>
+                  {salaryData.attendance?.holidayDays > 0 && (
+                    <Col xs={6} sm={4} md={true}>
+                      <div className="att-pill bg-white border rounded p-2 h-100">
+                        <div className="text-muted" style={{ fontSize: '11px' }}>Holidays</div>
+                        <div className="fw-bold fs-6 text-info">{salaryData.attendance?.holidayDays}</div>
+                        <div className="text-success fw-semibold" style={{ fontSize: '10px' }}>✓ Paid</div>
+                      </div>
+                    </Col>
+                  )}
+                  <Col xs={6} sm={4} md={true}>
+                    <div className="att-pill bg-white border rounded p-2 h-100">
                       <div className="text-muted" style={{ fontSize: '11px' }}>Total Absents</div>
-                      <div className="fw-bold fs-6 text-danger">{salaryData.attendance?.absentDays}</div>
+                      <div className="fw-bold fs-6 text-secondary">{salaryData.attendance?.absentDays}</div>
+                      <div className="text-muted" style={{ fontSize: '10px' }}>Working days</div>
                     </div>
                   </Col>
-                  <Col xs={4} md={2}>
-                    <div className="att-pill bg-white border rounded p-2">
+                  <Col xs={6} sm={4} md={true}>
+                    <div className="att-pill bg-white border rounded p-2 h-100">
                       <div className="text-muted" style={{ fontSize: '11px' }}>Paid Leave (1 max)</div>
                       <div className="fw-bold fs-6 text-warning">{salaryData.attendance?.paidLeavesUsed}</div>
+                      <div className="text-success fw-semibold" style={{ fontSize: '10px' }}>✓ ₹0 Deduction</div>
                     </div>
                   </Col>
-                  <Col xs={4} md={2}>
-                    <div className="att-pill bg-white border rounded p-2">
+                  <Col xs={6} sm={4} md={true}>
+                    <div className="att-pill bg-white border rounded p-2 h-100">
                       <div className="text-muted" style={{ fontSize: '11px' }}>Unpaid LOP Days</div>
                       <div className="fw-bold fs-6 text-danger">{salaryData.attendance?.unpaidAbsentDays}</div>
+                      <div className="text-danger fw-semibold" style={{ fontSize: '10px' }}>Deducted</div>
+                    </div>
+                  </Col>
+                  <Col xs={12} sm={4} md={true}>
+                    <div className="att-pill bg-success bg-opacity-10 border border-success rounded p-2 h-100">
+                      <div className="text-success small fw-bold" style={{ fontSize: '11px' }}>TOTAL PAID DAYS</div>
+                      <div className="fw-bold fs-6 text-success">
+                        {salaryData.attendance?.totalPaidDays || (salaryData.attendance?.totalDays - (salaryData.attendance?.unpaidAbsentDays || 0))}
+                      </div>
+                      <div className="text-muted" style={{ fontSize: '10px' }}>Present+Sun+PL</div>
                     </div>
                   </Col>
                 </Row>
@@ -537,7 +662,7 @@ const SalarySlip = () => {
                       <td>
                         <strong className="text-danger">Absent Days Deduction (LOP)</strong>
                         <div className="text-muted" style={{ fontSize: '11px' }}>
-                          {salaryData.attendance?.absentDays} absent - 1 Paid Leave = {salaryData.attendance?.unpaidAbsentDays} unpaid days @ {formatCurrency(salaryData.salary?.perDaySalary)}/day
+                          {salaryData.attendance?.absentDays} absents - 1 Paid Leave = {salaryData.attendance?.unpaidAbsentDays} unpaid days @ {formatCurrency(salaryData.salary?.perDaySalary)}/day
                         </div>
                       </td>
                       <td className="text-end text-danger">
@@ -576,6 +701,22 @@ const SalarySlip = () => {
                       <td>--</td>
                       <td className="text-end">--</td>
                     </tr>
+                    <tr className="bg-light">
+                      <td>
+                        <strong className="text-success">Sundays / Weekly Offs ({salaryData.attendance?.weekendDays} Days)</strong>
+                        <div className="text-muted" style={{ fontSize: '11px' }}>Weekly rest days fully paid in salary (No deduction)</div>
+                      </td>
+                      <td className="text-end text-success fw-semibold">
+                        Included in Base
+                      </td>
+                      <td>
+                        <strong className="text-success">Paid Leave Benefit (1 Day)</strong>
+                        <div className="text-muted" style={{ fontSize: '11px' }}>1 Absent day covered by paid leave policy</div>
+                      </td>
+                      <td className="text-end text-success fw-semibold">
+                        ₹0.00 (Exempt)
+                      </td>
+                    </tr>
                     {salaryData.salary?.bonus > 0 && (
                       <tr>
                         <td>
@@ -613,13 +754,15 @@ const SalarySlip = () => {
               <div className="bg-light p-3 rounded border mb-4">
                 <h6 className="fw-bold mb-1 small text-dark d-flex align-items-center gap-1">
                   <FaMoneyBillWave className="text-primary" />
-                  <span>Payroll Calculation & Leave Policy Formula:</span>
+                  <span>Payroll Calculation, Sunday Pay & Leave Policy Formula:</span>
                 </h6>
-                <p className="text-muted small mb-0" style={{ fontSize: '12px' }}>
-                  • <strong>Base Salary</strong>: Extracted dynamically from employee profile (₹{parseFloat(salaryData.employee?.profile_salary || 0).toLocaleString('en-IN')}).<br />
-                  • <strong>1 Paid Leave Rule</strong>: Each employee is entitled to 1 paid leave per calendar month. The first absent day is treated as a paid leave with zero deduction.<br />
-                  • <strong>Day-Wise Deduction Formula</strong>: Per Day Salary Rate = Base Salary ÷ Total Calendar Days ({salaryData.attendance?.totalDays} days) = <strong>{formatCurrency(salaryData.salary?.perDaySalary)} / day</strong>.<br />
-                  • <strong>Loss of Pay (LOP)</strong>: Unpaid Absent Days ({salaryData.attendance?.unpaidAbsentDays} days) × Per Day Rate ({formatCurrency(salaryData.salary?.perDaySalary)}) = <strong>{formatCurrency(salaryData.salary?.absentDeduction)}</strong>.
+                <p className="text-muted small mb-0" style={{ fontSize: '12px', lineHeight: '1.6' }}>
+                  • <strong>Dynamic Base Salary</strong>: Extracted dynamically from employee profile (<strong>{formatCurrency(salaryData.employee?.profile_salary)}</strong>).<br />
+                  • <strong>Sunday Salary (Fully Paid)</strong>: All {salaryData.attendance?.weekendDays} Sundays (weekly offs) are fully paid calendar days. Salary is <strong>never deducted</strong> for Sundays.<br />
+                  • <strong>1 Paid Leave Rule</strong>: Every employee receives <strong>1 paid leave</strong> per month. The first absent working day is covered with <strong>zero deduction</strong>.<br />
+                  • <strong>Day-Wise Deduction Formula</strong>: Per Day Salary Rate = Base Salary ÷ Total Month Days ({salaryData.attendance?.totalDays} days) = <strong>{formatCurrency(salaryData.salary?.perDaySalary)} / day</strong>.<br />
+                  • <strong>Loss of Pay (LOP)</strong>: Only unexcused working absent days exceeding 1 paid leave ({salaryData.attendance?.unpaidAbsentDays} days) are deducted: {salaryData.attendance?.unpaidAbsentDays} days × {formatCurrency(salaryData.salary?.perDaySalary)} = <strong>{formatCurrency(salaryData.salary?.absentDeduction)}</strong>.<br />
+                  • <strong>Total Paid Days</strong>: {salaryData.attendance?.presentDays} Present + {salaryData.attendance?.weekendDays} Sundays + {salaryData.attendance?.holidayDays || 0} Holidays + {salaryData.attendance?.paidLeavesUsed} Paid Leave = <strong>{salaryData.attendance?.totalPaidDays || (salaryData.attendance?.totalDays - (salaryData.attendance?.unpaidAbsentDays || 0))} Paid Days</strong> out of {salaryData.attendance?.totalDays} days.
                 </p>
               </div>
 
@@ -716,6 +859,7 @@ const SalarySlip = () => {
                     onChange={(e) => setPaymentStatus(e.target.value)}
                   >
                     <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
                     <option value="paid">Paid</option>
                     <option value="cancelled">Cancelled</option>
                   </Form.Select>
