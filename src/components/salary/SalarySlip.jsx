@@ -1,195 +1,770 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Card, Row, Col, Table, Badge, Button, 
-  Spinner, Alert, Form 
+  Spinner, Alert, Form, Modal 
 } from 'react-bootstrap';
-import { FaDownload, FaPrint, FaMoneyBillWave } from 'react-icons/fa';
+import { 
+  FaPrint, FaMoneyBillWave, FaUserTie, 
+  FaCalendarAlt, FaCheckCircle, FaExclamationTriangle,
+  FaChevronLeft, FaChevronRight, FaBuilding,
+  FaFileInvoiceDollar, FaCalculator, FaSave, FaCheck
+} from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import './SalarySlip.css';
 
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
 const SalarySlip = () => {
   const { user } = useAuth();
+  const isAdminOrHR = user?.role === 'admin' || user?.role === 'hr' || user?.role === 'manager';
+
+  const now = new Date();
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1); // 1-12
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  
   const [salaryData, setSalaryData] = useState(null);
+  const [employeesList, setEmployeesList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selectedMonth, setSelectedMonth] = useState('');
+  const [actionSuccess, setActionSuccess] = useState('');
 
+  // Finalize / Mark as Paid Modal State
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [customBonus, setCustomBonus] = useState(0);
+  const [customOtherDeductions, setCustomOtherDeductions] = useState(0);
+  const [paymentDate, setPaymentDate] = useState(now.toISOString().slice(0, 10));
+  const [paymentMethod, setPaymentMethod] = useState('Bank Transfer');
+  const [paymentStatus, setPaymentStatus] = useState('pending');
+  const [notes, setNotes] = useState('');
+  const [savingSalary, setSavingSalary] = useState(false);
+
+  // Initial load
   useEffect(() => {
-    const currentDate = new Date();
-    const monthYear = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-    setSelectedMonth(monthYear);
-    if (monthYear) {
-      fetchSalaryData(monthYear);
-    }
-  }, []);
+    fetchSalarySlip(selectedEmployeeId, selectedYear, selectedMonth);
+  }, [selectedEmployeeId, selectedYear, selectedMonth]);
 
-  const fetchSalaryData = async (monthYear) => {
+  const fetchSalarySlip = async (empId, yr, mo) => {
     try {
       setLoading(true);
-      const response = await api.get('/salary', {
-        params: { month: monthYear }
-      });
-      setSalaryData(response.data.data);
-    } catch (error) {
-      setError('Failed to fetch salary data');
+      setError('');
+      setActionSuccess('');
+
+      const params = {
+        year: yr,
+        month: mo
+      };
+      if (empId) params.employeeId = empId;
+
+      const response = await api.get('/salary/slip', { params });
+      if (response.data && response.data.success) {
+        const data = response.data.data;
+        setSalaryData(data);
+        if (data.employeesList && data.employeesList.length > 0) {
+          setEmployeesList(data.employeesList);
+        }
+        if (!selectedEmployeeId && data.employee?.id) {
+          setSelectedEmployeeId(data.employee.id);
+        }
+
+        // Initialize modal fields with current values
+        setCustomBonus(data.salary?.bonus || 0);
+        setCustomOtherDeductions(data.salary?.deductions?.otherDeductions || 0);
+        setPaymentStatus(data.status || 'pending');
+        setPaymentDate(data.paymentDate || now.toISOString().slice(0, 10));
+        setPaymentMethod(data.paymentMethod || 'Bank Transfer');
+        setNotes(data.notes || '');
+      } else {
+        setError(response.data?.message || 'Failed to load salary slip');
+      }
+    } catch (err) {
+      console.error('Error fetching salary slip:', err);
+      setError(err.response?.data?.message || 'Error generating salary slip. Please ensure salary is configured in employee profile.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleMonthChange = (e) => {
-    const value = e.target.value;
-    setSelectedMonth(value);
-    if (value) {
-      fetchSalaryData(value);
+  const handlePrevMonth = () => {
+    if (selectedMonth === 1) {
+      setSelectedYear(prev => prev - 1);
+      setSelectedMonth(12);
+    } else {
+      setSelectedMonth(prev => prev - 1);
     }
   };
 
-  const handleDownload = () => {
-    // Implement PDF download logic
+  const handleNextMonth = () => {
+    if (selectedMonth === 12) {
+      setSelectedYear(prev => prev + 1);
+      setSelectedMonth(1);
+    } else {
+      setSelectedMonth(prev => prev + 1);
+    }
   };
 
   const handlePrint = () => {
     window.print();
   };
 
-  if (loading) {
-    return (
-      <div className="text-center mt-5">
-        <Spinner animation="border" variant="primary" />
-      </div>
-    );
-  }
+  // Save / Finalize Salary to Database (Admin/HR)
+  const handleSaveSalary = async () => {
+    if (!salaryData?.employee?.id) return;
+    try {
+      setSavingSalary(true);
+      const payload = {
+        employee_id: salaryData.employee.id,
+        year: selectedYear,
+        month: selectedMonth,
+        bonus: parseFloat(customBonus || 0),
+        other_deductions: parseFloat(customOtherDeductions || 0),
+        payment_date: paymentDate,
+        payment_method: paymentMethod,
+        status: paymentStatus,
+        notes: notes
+      };
 
-  if (!salaryData) {
-    return (
-      <Alert variant="info">
-        No salary data available for the selected month.
-      </Alert>
-    );
-  }
+      const res = await api.post('/salary/generate', payload);
+      if (res.data && res.data.success) {
+        setShowSaveModal(false);
+        setActionSuccess('Salary slip finalized and saved successfully!');
+        fetchSalarySlip(selectedEmployeeId, selectedYear, selectedMonth);
+      }
+    } catch (err) {
+      console.error('Error saving salary:', err);
+      alert(err.response?.data?.message || 'Failed to save salary slip');
+    } finally {
+      setSavingSalary(false);
+    }
+  };
+
+  // Quick mark as paid
+  const handleMarkAsPaid = async () => {
+    if (!salaryData?.salaryRecordId) {
+      // If not saved yet, open modal to save and mark paid
+      setPaymentStatus('paid');
+      setShowSaveModal(true);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res = await api.post(`/salary/pay/${salaryData.salaryRecordId}`, {
+        payment_date: now.toISOString().slice(0, 10),
+        payment_method: 'Bank Transfer'
+      });
+      if (res.data && res.data.success) {
+        setActionSuccess('Salary successfully marked as PAID!');
+        fetchSalarySlip(selectedEmployeeId, selectedYear, selectedMonth);
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to mark as paid');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatCurrency = (val) => {
+    const num = parseFloat(val || 0);
+    return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
 
   return (
-    <div className="salary-slip">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>Salary Slip</h2>
-        <div className="d-flex gap-2">
-          <Form.Control
-            type="month"
-            value={selectedMonth}
-            onChange={handleMonthChange}
-            style={{ width: '200px' }}
-          />
-          <Button variant="outline-primary" onClick={handleDownload}>
-            <FaDownload className="me-2" />
-            Download
-          </Button>
-          <Button variant="outline-secondary" onClick={handlePrint}>
-            <FaPrint className="me-2" />
-            Print
-          </Button>
+    <div className="salary-slip-container container-fluid px-2 px-md-4 py-3">
+      {/* Top Controls Bar - Hidden when printing */}
+      <div className="no-print mb-4">
+        <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 bg-white p-3 rounded-3 shadow-sm border">
+          <div>
+            <h2 className="fs-4 fw-bold mb-1 text-dark d-flex align-items-center gap-2">
+              <FaFileInvoiceDollar className="text-primary" />
+              <span>Employee Salary Slip</span>
+            </h2>
+            <div className="text-muted small">
+              Dynamic attendance deductions with 1 Paid Leave policy (Loss of Pay managed per day)
+            </div>
+          </div>
+
+          <div className="d-flex flex-wrap align-items-center gap-2">
+            <Button variant="outline-dark" onClick={handlePrint} className="d-flex align-items-center gap-2 shadow-sm">
+              <FaPrint />
+              <span>Print / Download PDF</span>
+            </Button>
+
+            {isAdminOrHR && (
+              <>
+                <Button 
+                  variant="primary" 
+                  onClick={() => setShowSaveModal(true)} 
+                  className="d-flex align-items-center gap-2 shadow-sm"
+                >
+                  <FaSave />
+                  <span>{salaryData?.salaryRecordId ? 'Update / Finalize' : 'Finalize Salary'}</span>
+                </Button>
+
+                {salaryData?.status !== 'paid' && (
+                  <Button 
+                    variant="success" 
+                    onClick={handleMarkAsPaid} 
+                    className="d-flex align-items-center gap-2 shadow-sm"
+                  >
+                    <FaCheck />
+                    <span>Mark as Paid</span>
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Filter Controls Bar */}
+        <div className="bg-white p-3 rounded-3 shadow-sm border mt-3">
+          <Row className="g-3 align-items-center">
+            {/* Employee Selector (Admins / HR) */}
+            {isAdminOrHR && employeesList.length > 0 && (
+              <Col xs={12} md={5} lg={4}>
+                <Form.Label className="small text-muted fw-bold mb-1">Select Employee</Form.Label>
+                <Form.Select 
+                  value={selectedEmployeeId} 
+                  onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                  className="fw-semibold"
+                >
+                  {employeesList.map(emp => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.first_name} {emp.last_name} ({emp.employee_id}) — {emp.position || emp.department} [₹{parseFloat(emp.salary || 0).toLocaleString('en-IN')}]
+                    </option>
+                  ))}
+                </Form.Select>
+              </Col>
+            )}
+
+            {/* Year Selector */}
+            <Col xs={6} sm={4} md={2}>
+              <Form.Label className="small text-muted fw-bold mb-1">Year</Form.Label>
+              <Form.Select 
+                value={selectedYear} 
+                onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
+              >
+                {[2025, 2026, 2027].map(yr => (
+                  <option key={yr} value={yr}>{yr}</option>
+                ))}
+              </Form.Select>
+            </Col>
+
+            {/* Month Selector with Prev/Next */}
+            <Col xs={6} sm={8} md={isAdminOrHR ? 4 : 6}>
+              <Form.Label className="small text-muted fw-bold mb-1">Month</Form.Label>
+              <div className="d-flex align-items-center gap-1">
+                <Button 
+                  variant="outline-secondary" 
+                  size="sm" 
+                  onClick={handlePrevMonth}
+                  title="Previous Month"
+                  className="px-2"
+                >
+                  <FaChevronLeft size={10} />
+                </Button>
+                <Form.Select 
+                  value={selectedMonth} 
+                  onChange={(e) => setSelectedMonth(parseInt(e.target.value, 10))}
+                  className="fw-semibold"
+                >
+                  {MONTH_NAMES.map((mName, idx) => (
+                    <option key={idx + 1} value={idx + 1}>
+                      {mName} ({selectedYear})
+                    </option>
+                  ))}
+                </Form.Select>
+                <Button 
+                  variant="outline-secondary" 
+                  size="sm" 
+                  onClick={handleNextMonth}
+                  title="Next Month"
+                  className="px-2"
+                >
+                  <FaChevronRight size={10} />
+                </Button>
+              </div>
+            </Col>
+
+            <Col xs={12} md={isAdminOrHR ? 2 : 4} className="d-flex align-items-end justify-content-md-end">
+              <Button 
+                variant="outline-primary" 
+                size="sm"
+                onClick={() => fetchSalarySlip(selectedEmployeeId, selectedYear, selectedMonth)}
+                className="w-100"
+              >
+                Refresh Data
+              </Button>
+            </Col>
+          </Row>
         </div>
       </div>
 
-      {error && <Alert variant="danger">{error}</Alert>}
+      {actionSuccess && (
+        <Alert variant="success" dismissible onClose={() => setActionSuccess('')} className="no-print shadow-sm">
+          <FaCheckCircle className="me-2" /> {actionSuccess}
+        </Alert>
+      )}
 
-      <Card className="salary-slip-card">
-        <Card.Body>
-          <div className="salary-slip-header text-center">
-            <h3>Company Name</h3>
-            <p className="text-muted">Salary Slip for the month of {salaryData.month}</p>
-            <Badge bg={salaryData.status === 'paid' ? 'success' : 'warning'}>
-              {salaryData.status || 'Pending'}
-            </Badge>
+      {error && (
+        <Alert variant="danger" dismissible onClose={() => setError('')} className="no-print shadow-sm">
+          <FaExclamationTriangle className="me-2" /> {error}
+        </Alert>
+      )}
+
+      {loading ? (
+        <div className="text-center py-5">
+          <Spinner animation="border" variant="primary" />
+          <p className="mt-2 text-muted small">Generating dynamic salary calculation...</p>
+        </div>
+      ) : !salaryData ? (
+        <Alert variant="info" className="text-center py-4">
+          <h5>No Salary Data Available</h5>
+          <p className="mb-0 text-muted">Please configure the base salary in the employee's profile.</p>
+        </Alert>
+      ) : (
+        <>
+          {/* Quick Metrics KPI Banner (Screen Only) */}
+          <div className="no-print mb-4">
+            <Row className="g-3">
+              <Col xs={6} md={4} lg={2}>
+                <div className="border rounded p-3 text-center bg-white shadow-sm h-100">
+                  <div className="text-muted small fw-bold">BASE SALARY</div>
+                  <div className="fs-5 fw-bold text-dark mt-1">{formatCurrency(salaryData.salary?.baseSalary)}</div>
+                  <div className="text-muted" style={{ fontSize: '11px' }}>From Profile</div>
+                </div>
+              </Col>
+
+              <Col xs={6} md={4} lg={2}>
+                <div className="border rounded p-3 text-center bg-white shadow-sm h-100">
+                  <div className="text-primary small fw-bold">WORKING DAYS</div>
+                  <div className="fs-5 fw-bold text-primary mt-1">{salaryData.attendance?.workingDays || 0}</div>
+                  <div className="text-muted" style={{ fontSize: '11px' }}>of {salaryData.attendance?.totalDays} total days</div>
+                </div>
+              </Col>
+
+              <Col xs={6} md={4} lg={2}>
+                <div className="border rounded p-3 text-center bg-white shadow-sm h-100">
+                  <div className="text-success small fw-bold">PRESENT DAYS</div>
+                  <div className="fs-5 fw-bold text-success mt-1">{salaryData.attendance?.presentDays || 0}</div>
+                  <div className="text-muted" style={{ fontSize: '11px' }}>Punched days</div>
+                </div>
+              </Col>
+
+              <Col xs={6} md={4} lg={2}>
+                <div className="border rounded p-3 text-center bg-white shadow-sm h-100">
+                  <div className="text-warning small fw-bold">PAID LEAVES</div>
+                  <div className="fs-5 fw-bold text-warning mt-1">{salaryData.attendance?.paidLeavesUsed || 0} / 1</div>
+                  <div className="text-muted" style={{ fontSize: '11px' }}>1 Allowed per month</div>
+                </div>
+              </Col>
+
+              <Col xs={6} md={4} lg={2}>
+                <div className="border rounded p-3 text-center bg-white shadow-sm h-100">
+                  <div className="text-danger small fw-bold">ABSENT DEDUCTION</div>
+                  <div className="fs-5 fw-bold text-danger mt-1">-{formatCurrency(salaryData.salary?.absentDeduction)}</div>
+                  <div className="text-muted" style={{ fontSize: '11px' }}>
+                    {salaryData.attendance?.unpaidAbsentDays || 0} days @ {formatCurrency(salaryData.salary?.perDaySalary)}/day
+                  </div>
+                </div>
+              </Col>
+
+              <Col xs={6} md={4} lg={2}>
+                <div className="border rounded p-3 text-center bg-success bg-opacity-10 border-success shadow-sm h-100">
+                  <div className="text-success small fw-bold">NET SALARY</div>
+                  <div className="fs-5 fw-bold text-success mt-1">{formatCurrency(salaryData.salary?.netSalary)}</div>
+                  <div className="text-muted" style={{ fontSize: '11px' }}>
+                    <Badge bg={salaryData.status === 'paid' ? 'success' : 'warning'} className="text-uppercase" style={{ fontSize: '10px' }}>
+                      {salaryData.status || 'Pending'}
+                    </Badge>
+                  </div>
+                </div>
+              </Col>
+            </Row>
           </div>
 
-          <hr />
+          {/* FORMAL SALARY SLIP (PRINTABLE CARD) */}
+          <Card className="salary-slip-card border-0 shadow-sm mx-auto bg-white mb-5">
+            <Card.Body className="p-4 p-md-5">
+              
+              {/* Company Header */}
+              <div className="d-flex justify-content-between align-items-start border-bottom pb-4 mb-4">
+                <div className="d-flex align-items-center gap-3">
+                  <div className="company-logo-badge">
+                    <FaBuilding size={32} />
+                  </div>
+                  <div>
+                    <h3 className="fw-bold mb-1 text-dark">PARAKSH TECHNOLOGIES</h3>
+                    <div className="text-muted small">
+                      Learning Management System & Corporate Operations
+                    </div>
+                    <div className="text-muted" style={{ fontSize: '12px' }}>
+                      GSTIN / Reg No: 07AAECP1234F1Z8 • contact@parakshtech.com
+                    </div>
+                  </div>
+                </div>
 
-          <Row className="mb-4">
-            <Col md={6}>
-              <p><strong>Employee:</strong> {salaryData.employee_name}</p>
-              <p><strong>Employee ID:</strong> {salaryData.employee_id}</p>
-              <p><strong>Department:</strong> {salaryData.department}</p>
-              <p><strong>Position:</strong> {salaryData.position}</p>
-            </Col>
-            <Col md={6}>
-              <p><strong>Payment Date:</strong> {salaryData.payment_date || 'N/A'}</p>
-              <p><strong>Bank Account:</strong> {salaryData.bank_account || 'N/A'}</p>
-            </Col>
-          </Row>
+                <div className="text-end">
+                  <div className="badge bg-primary fs-6 px-3 py-2 mb-2">
+                    SALARY PAYSLIP
+                  </div>
+                  <div className="fw-bold fs-5 text-dark">{salaryData.monthName}</div>
+                  <div>
+                    <Badge 
+                      bg={salaryData.status === 'paid' ? 'success' : 'warning'}
+                      className="text-uppercase py-1 px-3 mt-1"
+                    >
+                      {salaryData.status === 'paid' ? '✓ PAID' : 'PENDING APPROVAL'}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
 
-          <Table bordered className="salary-table">
-            <thead>
-              <tr>
-                <th>Description</th>
-                <th className="text-end">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="table-primary">
-                <td><strong>Earnings</strong></td>
-                <td className="text-end"></td>
-              </tr>
-              <tr>
-                <td>Basic Salary</td>
-                <td className="text-end">${salaryData.basic_salary?.toFixed(2) || '0.00'}</td>
-              </tr>
-              <tr>
-                <td>House Allowance</td>
-                <td className="text-end">${salaryData.house_allowance?.toFixed(2) || '0.00'}</td>
-              </tr>
-              <tr>
-                <td>Transport Allowance</td>
-                <td className="text-end">${salaryData.transport_allowance?.toFixed(2) || '0.00'}</td>
-              </tr>
-              <tr>
-                <td>Bonus</td>
-                <td className="text-end">${salaryData.bonus?.toFixed(2) || '0.00'}</td>
-              </tr>
-              <tr className="table-primary">
-                <td><strong>Total Earnings</strong></td>
-                <td className="text-end"><strong>${salaryData.total_earnings?.toFixed(2) || '0.00'}</strong></td>
-              </tr>
-              <tr className="table-danger">
-                <td><strong>Deductions</strong></td>
-                <td className="text-end"></td>
-              </tr>
-              <tr>
-                <td>Income Tax</td>
-                <td className="text-end">${salaryData.income_tax?.toFixed(2) || '0.00'}</td>
-              </tr>
-              <tr>
-                <td>Health Insurance</td>
-                <td className="text-end">${salaryData.health_insurance?.toFixed(2) || '0.00'}</td>
-              </tr>
-              <tr>
-                <td>Pension</td>
-                <td className="text-end">${salaryData.pension?.toFixed(2) || '0.00'}</td>
-              </tr>
-              <tr className="table-danger">
-                <td><strong>Total Deductions</strong></td>
-                <td className="text-end"><strong>${salaryData.total_deductions?.toFixed(2) || '0.00'}</strong></td>
-              </tr>
-              <tr className="table-success">
-                <td><strong>Net Salary</strong></td>
-                <td className="text-end"><strong>${salaryData.net_salary?.toFixed(2) || '0.00'}</strong></td>
-              </tr>
-            </tbody>
-          </Table>
+              {/* Employee & Pay Details Grid */}
+              <div className="bg-light p-3 rounded-3 mb-4 border">
+                <Row className="g-3">
+                  <Col xs={6} md={3}>
+                    <div className="text-muted small">Employee Name</div>
+                    <div className="fw-bold text-dark">{salaryData.employee?.name}</div>
+                  </Col>
+                  <Col xs={6} md={3}>
+                    <div className="text-muted small">Employee ID / Job No</div>
+                    <div className="fw-bold font-monospace text-primary">{salaryData.employee?.employee_id}</div>
+                  </Col>
+                  <Col xs={6} md={3}>
+                    <div className="text-muted small">Department</div>
+                    <div className="fw-bold text-dark">{salaryData.employee?.department}</div>
+                  </Col>
+                  <Col xs={6} md={3}>
+                    <div className="text-muted small">Designation</div>
+                    <div className="fw-bold text-dark">{salaryData.employee?.position}</div>
+                  </Col>
 
-          <div className="salary-notes mt-3">
-            <h6>Notes:</h6>
-            <p className="text-muted small">{salaryData.notes || 'No additional notes.'}</p>
-          </div>
+                  <Col xs={6} md={3}>
+                    <div className="text-muted small">Date of Joining</div>
+                    <div className="fw-semibold text-dark">{salaryData.employee?.joining_date || 'N/A'}</div>
+                  </Col>
+                  <Col xs={6} md={3}>
+                    <div className="text-muted small">Payment Mode</div>
+                    <div className="fw-semibold text-dark">{salaryData.paymentMethod || 'Bank Transfer'}</div>
+                  </Col>
+                  <Col xs={6} md={3}>
+                    <div className="text-muted small">Payment Date</div>
+                    <div className="fw-semibold text-dark">{salaryData.paymentDate || 'Pending'}</div>
+                  </Col>
+                  <Col xs={6} md={3}>
+                    <div className="text-muted small">Pay Period</div>
+                    <div className="fw-semibold text-dark">
+                      01 {salaryData.monthName} – {salaryData.attendance?.totalDays} {salaryData.monthName}
+                    </div>
+                  </Col>
+                </Row>
+              </div>
 
-          <div className="salary-footer text-center mt-4">
-            <small className="text-muted">
-              This is a computer-generated document and does not require a signature.
-            </small>
-          </div>
-        </Card.Body>
-      </Card>
+              {/* Attendance & Leave Summary Box */}
+              <div className="attendance-policy-banner p-3 rounded-3 mb-4">
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <h6 className="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
+                    <FaCalculator className="text-primary" />
+                    <span>Attendance & Leave Record Summary</span>
+                  </h6>
+                  <span className="badge bg-info bg-opacity-25 text-primary border border-info border-opacity-25 px-2 py-1 small">
+                    Policy: 1 Paid Leave Allowed / Month
+                  </span>
+                </div>
+                <Row className="g-2 text-center">
+                  <Col xs={4} md={2}>
+                    <div className="att-pill bg-white border rounded p-2">
+                      <div className="text-muted" style={{ fontSize: '11px' }}>Total Days</div>
+                      <div className="fw-bold fs-6">{salaryData.attendance?.totalDays}</div>
+                    </div>
+                  </Col>
+                  <Col xs={4} md={2}>
+                    <div className="att-pill bg-white border rounded p-2">
+                      <div className="text-muted" style={{ fontSize: '11px' }}>Working Days</div>
+                      <div className="fw-bold fs-6">{salaryData.attendance?.workingDays}</div>
+                    </div>
+                  </Col>
+                  <Col xs={4} md={2}>
+                    <div className="att-pill bg-white border rounded p-2">
+                      <div className="text-muted" style={{ fontSize: '11px' }}>Present Days</div>
+                      <div className="fw-bold fs-6 text-success">{salaryData.attendance?.presentDays}</div>
+                    </div>
+                  </Col>
+                  <Col xs={4} md={2}>
+                    <div className="att-pill bg-white border rounded p-2">
+                      <div className="text-muted" style={{ fontSize: '11px' }}>Total Absents</div>
+                      <div className="fw-bold fs-6 text-danger">{salaryData.attendance?.absentDays}</div>
+                    </div>
+                  </Col>
+                  <Col xs={4} md={2}>
+                    <div className="att-pill bg-white border rounded p-2">
+                      <div className="text-muted" style={{ fontSize: '11px' }}>Paid Leave (1 max)</div>
+                      <div className="fw-bold fs-6 text-warning">{salaryData.attendance?.paidLeavesUsed}</div>
+                    </div>
+                  </Col>
+                  <Col xs={4} md={2}>
+                    <div className="att-pill bg-white border rounded p-2">
+                      <div className="text-muted" style={{ fontSize: '11px' }}>Unpaid LOP Days</div>
+                      <div className="fw-bold fs-6 text-danger">{salaryData.attendance?.unpaidAbsentDays}</div>
+                    </div>
+                  </Col>
+                </Row>
+              </div>
+
+              {/* Earnings & Deductions Comparison Table */}
+              <div className="table-responsive mb-4">
+                <Table bordered className="salary-breakdown-table mb-0">
+                  <thead className="table-light">
+                    <tr>
+                      <th style={{ width: '35%' }}>EARNINGS</th>
+                      <th style={{ width: '15%' }} className="text-end">AMOUNT (₹)</th>
+                      <th style={{ width: '35%' }}>DEDUCTIONS</th>
+                      <th style={{ width: '15%' }} className="text-end">AMOUNT (₹)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>
+                        <strong>Basic Salary (50%)</strong>
+                        <div className="text-muted" style={{ fontSize: '11px' }}>Core pay rate</div>
+                      </td>
+                      <td className="text-end">{formatCurrency(salaryData.salary?.earnings?.basicSalary)}</td>
+                      <td>
+                        <strong className="text-danger">Absent Days Deduction (LOP)</strong>
+                        <div className="text-muted" style={{ fontSize: '11px' }}>
+                          {salaryData.attendance?.absentDays} absent - 1 Paid Leave = {salaryData.attendance?.unpaidAbsentDays} unpaid days @ {formatCurrency(salaryData.salary?.perDaySalary)}/day
+                        </div>
+                      </td>
+                      <td className="text-end text-danger">
+                        {formatCurrency(salaryData.salary?.absentDeduction)}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <strong>House Rent Allowance (HRA - 30%)</strong>
+                        <div className="text-muted" style={{ fontSize: '11px' }}>Housing assistance</div>
+                      </td>
+                      <td className="text-end">{formatCurrency(salaryData.salary?.earnings?.hra)}</td>
+                      <td>
+                        <strong>Other / Statutory Deductions</strong>
+                        <div className="text-muted" style={{ fontSize: '11px' }}>Taxes / penalties</div>
+                      </td>
+                      <td className="text-end">
+                        {formatCurrency(salaryData.salary?.deductions?.otherDeductions)}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <strong>Conveyance Allowance (10%)</strong>
+                        <div className="text-muted" style={{ fontSize: '11px' }}>Travel support</div>
+                      </td>
+                      <td className="text-end">{formatCurrency(salaryData.salary?.earnings?.conveyance)}</td>
+                      <td>--</td>
+                      <td className="text-end">--</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <strong>Special Allowance (10%)</strong>
+                        <div className="text-muted" style={{ fontSize: '11px' }}>Performance & utility</div>
+                      </td>
+                      <td className="text-end">{formatCurrency(salaryData.salary?.earnings?.specialAllowance)}</td>
+                      <td>--</td>
+                      <td className="text-end">--</td>
+                    </tr>
+                    {salaryData.salary?.bonus > 0 && (
+                      <tr>
+                        <td>
+                          <strong className="text-success">Performance Bonus / Incentive</strong>
+                        </td>
+                        <td className="text-end text-success">{formatCurrency(salaryData.salary?.bonus)}</td>
+                        <td>--</td>
+                        <td className="text-end">--</td>
+                      </tr>
+                    )}
+                    <tr className="table-light fw-bold">
+                      <td>TOTAL GROSS EARNINGS</td>
+                      <td className="text-end">{formatCurrency(salaryData.salary?.earnings?.totalEarnings)}</td>
+                      <td>TOTAL DEDUCTIONS</td>
+                      <td className="text-end text-danger">{formatCurrency(salaryData.salary?.deductions?.totalDeductions)}</td>
+                    </tr>
+                  </tbody>
+                </Table>
+              </div>
+
+              {/* Net Salary Highlight Box */}
+              <div className="net-salary-highlight-box p-4 rounded-3 text-center mb-4">
+                <div className="text-uppercase text-secondary small fw-bold tracking-wider">
+                  NET TAKE HOME PAYABLE AMOUNT
+                </div>
+                <div className="display-6 fw-bold text-success my-1">
+                  {formatCurrency(salaryData.salary?.netSalary)}
+                </div>
+                <div className="text-muted fst-italic small">
+                  Amount in words: <strong className="text-dark">{salaryData.salary?.netSalaryInWords}</strong>
+                </div>
+              </div>
+
+              {/* Deduction Policy Explanation */}
+              <div className="bg-light p-3 rounded border mb-4">
+                <h6 className="fw-bold mb-1 small text-dark d-flex align-items-center gap-1">
+                  <FaMoneyBillWave className="text-primary" />
+                  <span>Payroll Calculation & Leave Policy Formula:</span>
+                </h6>
+                <p className="text-muted small mb-0" style={{ fontSize: '12px' }}>
+                  • <strong>Base Salary</strong>: Extracted dynamically from employee profile (₹{parseFloat(salaryData.employee?.profile_salary || 0).toLocaleString('en-IN')}).<br />
+                  • <strong>1 Paid Leave Rule</strong>: Each employee is entitled to 1 paid leave per calendar month. The first absent day is treated as a paid leave with zero deduction.<br />
+                  • <strong>Day-Wise Deduction Formula</strong>: Per Day Salary Rate = Base Salary ÷ Total Calendar Days ({salaryData.attendance?.totalDays} days) = <strong>{formatCurrency(salaryData.salary?.perDaySalary)} / day</strong>.<br />
+                  • <strong>Loss of Pay (LOP)</strong>: Unpaid Absent Days ({salaryData.attendance?.unpaidAbsentDays} days) × Per Day Rate ({formatCurrency(salaryData.salary?.perDaySalary)}) = <strong>{formatCurrency(salaryData.salary?.absentDeduction)}</strong>.
+                </p>
+              </div>
+
+              {salaryData.notes && (
+                <div className="mb-4 p-2 px-3 border-start border-4 border-primary bg-light rounded small">
+                  <strong>Notes:</strong> {salaryData.notes}
+                </div>
+              )}
+
+              {/* Signatures Area */}
+              <div className="signatures-wrapper pt-4 mt-4 border-top">
+                <Row className="text-center">
+                  <Col xs={6}>
+                    <div className="signature-line mx-auto mb-2" style={{ maxWidth: '200px', borderBottom: '1px dashed #666', height: '40px' }}></div>
+                    <div className="fw-bold small">EMPLOYEE SIGNATURE</div>
+                    <div className="text-muted" style={{ fontSize: '11px' }}>({salaryData.employee?.name})</div>
+                  </Col>
+                  <Col xs={6}>
+                    <div className="signature-line mx-auto mb-2" style={{ maxWidth: '200px', borderBottom: '1px dashed #666', height: '40px' }}></div>
+                    <div className="fw-bold small">AUTHORIZED SIGNATORY</div>
+                    <div className="text-muted" style={{ fontSize: '11px' }}>Human Resources & Payroll Dept</div>
+                  </Col>
+                </Row>
+                <div className="text-center text-muted mt-4" style={{ fontSize: '11px' }}>
+                  This is a system-generated document based on biometric machine punch records and HR policy rules.
+                </div>
+              </div>
+
+            </Card.Body>
+          </Card>
+        </>
+      )}
+
+      {/* Finalize / Update Salary Modal (Admin / HR) */}
+      <Modal show={showSaveModal} onHide={() => setShowSaveModal(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title className="fs-5 fw-bold">
+            <FaFileInvoiceDollar className="text-primary me-2" />
+            Finalize Salary Slip ({salaryData?.monthName})
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form>
+            <div className="mb-3 p-3 bg-light rounded">
+              <div className="d-flex justify-content-between mb-1">
+                <span className="text-muted small">Employee:</span>
+                <strong>{salaryData?.employee?.name} ({salaryData?.employee?.employee_id})</strong>
+              </div>
+              <div className="d-flex justify-content-between mb-1">
+                <span className="text-muted small">Base Salary:</span>
+                <strong>{formatCurrency(salaryData?.salary?.baseSalary)}</strong>
+              </div>
+              <div className="d-flex justify-content-between mb-1">
+                <span className="text-muted small">Absent Deduction (LOP):</span>
+                <strong className="text-danger">-{formatCurrency(salaryData?.salary?.absentDeduction)}</strong>
+              </div>
+              <div className="d-flex justify-content-between">
+                <span className="text-muted small">Estimated Net Pay:</span>
+                <strong className="text-success">{formatCurrency(salaryData?.salary?.netSalary)}</strong>
+              </div>
+            </div>
+
+            <Row className="g-2 mb-3">
+              <Col xs={6}>
+                <Form.Group>
+                  <Form.Label className="small fw-bold">Bonus / Incentive (₹)</Form.Label>
+                  <Form.Control 
+                    type="number" 
+                    value={customBonus} 
+                    onChange={(e) => setCustomBonus(e.target.value)}
+                    min="0"
+                  />
+                </Form.Group>
+              </Col>
+              <Col xs={6}>
+                <Form.Group>
+                  <Form.Label className="small fw-bold">Other Deductions (₹)</Form.Label>
+                  <Form.Control 
+                    type="number" 
+                    value={customOtherDeductions} 
+                    onChange={(e) => setCustomOtherDeductions(e.target.value)}
+                    min="0"
+                  />
+                </Form.Group>
+              </Col>
+            </Row>
+
+            <Row className="g-2 mb-3">
+              <Col xs={6}>
+                <Form.Group>
+                  <Form.Label className="small fw-bold">Payment Status</Form.Label>
+                  <Form.Select 
+                    value={paymentStatus} 
+                    onChange={(e) => setPaymentStatus(e.target.value)}
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="paid">Paid</option>
+                    <option value="cancelled">Cancelled</option>
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+              <Col xs={6}>
+                <Form.Group>
+                  <Form.Label className="small fw-bold">Payment Method</Form.Label>
+                  <Form.Select 
+                    value={paymentMethod} 
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                  >
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="UPI / NEFT">UPI / NEFT</option>
+                    <option value="Cheque">Cheque</option>
+                    <option value="Cash">Cash</option>
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+            </Row>
+
+            <Form.Group className="mb-3">
+              <Form.Label className="small fw-bold">Payment Date</Form.Label>
+              <Form.Control 
+                type="date" 
+                value={paymentDate} 
+                onChange={(e) => setPaymentDate(e.target.value)}
+              />
+            </Form.Group>
+
+            <Form.Group>
+              <Form.Label className="small fw-bold">Notes / Comments</Form.Label>
+              <Form.Control 
+                as="textarea" 
+                rows={2} 
+                value={notes} 
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Optional remark, e.g. Special festive incentive added"
+              />
+            </Form.Group>
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowSaveModal(false)}>Cancel</Button>
+          <Button variant="primary" onClick={handleSaveSalary} disabled={savingSalary}>
+            {savingSalary ? <><Spinner size="sm" className="me-2" />Saving...</> : 'Save & Finalize'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 };

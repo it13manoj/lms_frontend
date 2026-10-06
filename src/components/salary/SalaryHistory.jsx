@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Table, Badge, Spinner, Alert, Form, Row, Col, Button } from 'react-bootstrap';
-import { FaDownload, FaEye } from 'react-icons/fa';
+import { FaEye, FaFileInvoiceDollar, FaCalendarAlt } from 'react-icons/fa';
+import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import './SalaryHistory.css';
 
 const SalaryHistory = () => {
+  const navigate = useNavigate();
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -34,95 +36,134 @@ const SalaryHistory = () => {
       pending: 'warning',
       cancelled: 'danger'
     };
-    return <Badge bg={variants[status] || 'secondary'}>{status}</Badge>;
+    return <Badge bg={variants[status] || 'secondary'} className="text-uppercase">{status || 'Pending'}</Badge>;
+  };
+
+  const formatCurrency = (val) => {
+    const num = parseFloat(val || 0);
+    return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
 
-  if (loading) {
-    return (
-      <div className="text-center mt-5">
-        <Spinner animation="border" variant="primary" />
-      </div>
-    );
-  }
-
   return (
-    <div className="salary-history">
-      <h2 className="mb-4">Salary History</h2>
+    <div className="salary-history container-fluid px-2 px-md-4 py-3">
+      <div className="d-flex justify-content-between align-items-center mb-4 bg-white p-3 rounded-3 shadow-sm border">
+        <div>
+          <h2 className="fs-4 fw-bold mb-1 text-dark d-flex align-items-center gap-2">
+            <FaFileInvoiceDollar className="text-primary" />
+            <span>Salary & Payroll History</span>
+          </h2>
+          <div className="text-muted small">
+            View past generated salary slips and payment status records
+          </div>
+        </div>
+        <Button variant="outline-primary" onClick={() => navigate('/salary')}>
+          View Current Salary Slip
+        </Button>
+      </div>
 
-      <Row className="mb-4">
-        <Col md={4}>
-          <Form.Group>
-            <Form.Label>Year</Form.Label>
-            <Form.Select 
-              value={year} 
-              onChange={(e) => setYear(parseInt(e.target.value))}
-            >
-              {years.map(y => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </Form.Select>
-          </Form.Group>
-        </Col>
-        <Col md={8} className="d-flex align-items-end">
-          <Button variant="outline-secondary" onClick={fetchSalaryHistory}>
-            Refresh
-          </Button>
-        </Col>
-      </Row>
+      <div className="bg-white p-3 rounded-3 shadow-sm border mb-4">
+        <Row className="g-3 align-items-center">
+          <Col xs={12} sm={4} md={3}>
+            <Form.Group>
+              <Form.Label className="small text-muted fw-bold mb-1">Select Year</Form.Label>
+              <Form.Select 
+                value={year} 
+                onChange={(e) => setYear(parseInt(e.target.value))}
+                className="fw-semibold"
+              >
+                {years.map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+          </Col>
+          <Col xs={12} sm={8} md={9} className="d-flex align-items-end justify-content-sm-end">
+            <Button variant="outline-secondary" onClick={fetchSalaryHistory}>
+              Refresh History
+            </Button>
+          </Col>
+        </Row>
+      </div>
 
       {error && <Alert variant="danger">{error}</Alert>}
 
-      <Card>
-        <Card.Body className="table-responsive">
-          <Table striped hover className="mb-0">
-            <thead>
-              <tr>
-                <th>Month</th>
-                <th>Basic Salary</th>
-                <th>Allowances</th>
-                <th>Deductions</th>
-                <th>Net Salary</th>
-                <th>Status</th>
-                <th>Payment Date</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {history.length === 0 ? (
-                <tr>
-                  <td colSpan="8" className="text-center py-4">
-                    No salary records found for {year}
-                  </td>
-                </tr>
-              ) : (
-                history.map((record) => (
-                  <tr key={record.id}>
-                    <td>{record.month}</td>
-                    <td>${record.basic_salary?.toFixed(2) || '0.00'}</td>
-                    <td>${record.allowances?.toFixed(2) || '0.00'}</td>
-                    <td>${record.deductions?.toFixed(2) || '0.00'}</td>
-                    <td>
-                      <strong>${record.net_salary?.toFixed(2) || '0.00'}</strong>
-                    </td>
-                    <td>{getStatusBadge(record.status)}</td>
-                    <td>{record.payment_date ? new Date(record.payment_date).toLocaleDateString() : '-'}</td>
-                    <td>
-                      <div className="d-flex gap-2">
-                        <Button variant="outline-primary" size="sm">
-                          <FaEye />
-                        </Button>
-                        <Button variant="outline-success" size="sm">
-                          <FaDownload />
-                        </Button>
-                      </div>
-                    </td>
+      <Card className="shadow-sm border-0">
+        <Card.Body className="p-0">
+          {loading ? (
+            <div className="text-center py-5">
+              <Spinner animation="border" variant="primary" />
+              <p className="mt-2 text-muted small">Loading salary history records...</p>
+            </div>
+          ) : (
+            <div className="table-responsive">
+              <Table hover className="align-middle mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th>Month</th>
+                    <th>Employee</th>
+                    <th>Base Salary</th>
+                    <th>Absent Deduction (LOP)</th>
+                    <th>Other Deductions</th>
+                    <th>Net Salary</th>
+                    <th>Status</th>
+                    <th>Payment Date</th>
+                    <th>Action</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </Table>
+                </thead>
+                <tbody>
+                  {history.length === 0 ? (
+                    <tr>
+                      <td colSpan="9" className="text-center py-5 text-muted">
+                        <FaCalendarAlt size={36} className="mb-2 opacity-50" />
+                        <div>No salary records found for {year}</div>
+                        <div className="small">Generate or finalize salary slips to view them in history.</div>
+                      </td>
+                    </tr>
+                  ) : (
+                    history.map((record) => (
+                      <tr key={record.id}>
+                        <td className="fw-bold text-dark font-monospace">
+                          {record.month_year ? record.month_year.substring(0, 7) : '-'}
+                        </td>
+                        <td>
+                          <div className="fw-semibold">
+                            {record.Employee ? `${record.Employee.first_name} ${record.Employee.last_name}` : 'Employee'}
+                          </div>
+                          <div className="text-muted small">{record.Employee?.employee_id || ''}</div>
+                        </td>
+                        <td>{formatCurrency(record.basic_salary)}</td>
+                        <td className="text-danger fw-semibold">
+                          -{formatCurrency(record.absent_deduction || record.deductions)}
+                        </td>
+                        <td>
+                          {formatCurrency(Math.max(0, (record.deductions || 0) - (record.absent_deduction || 0)))}
+                        </td>
+                        <td className="text-success fw-bold">
+                          {formatCurrency(record.net_salary)}
+                        </td>
+                        <td>{getStatusBadge(record.status)}</td>
+                        <td>{record.payment_date || '-'}</td>
+                        <td>
+                          <Button 
+                            variant="outline-primary" 
+                            size="sm"
+                            onClick={() => navigate('/salary')}
+                            title="View Salary Slip"
+                            className="d-flex align-items-center gap-1"
+                          >
+                            <FaEye size={12} />
+                            <span>View Slip</span>
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </Table>
+            </div>
+          )}
         </Card.Body>
       </Card>
     </div>

@@ -1,27 +1,126 @@
-.salary-slip .salary-slip-card {
-  max-width: 900px;
-  margin: 0 auto;
+/* Salary Slip Master Styling */
+.salary-slip-container {
+  background-color: #f8fafc;
+  min-height: 100vh;
 }
 
-.salary-slip .salary-slip-header {
-  padding: 20px 0;
+/* Formal Salary Slip Card */
+.salary-slip-card {
+  max-width: 950px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
 }
 
-.salary-slip .salary-slip-header h3 {
-  font-weight: 600;
+/* Company Badge / Logo */
+.company-logo-badge {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);
 }
 
-.salary-slip .salary-table td:last-child {
-  font-weight: 500;
+/* Attendance Policy Banner */
+.attendance-policy-banner {
+  background-color: #f1f5f9;
+  border: 1px solid #e2e8f0;
 }
 
+.att-pill {
+  transition: transform 0.15s ease;
+}
+
+.att-pill:hover {
+  transform: translateY(-1px);
+}
+
+/* Breakdown Table */
+.salary-breakdown-table th {
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  color: #475569;
+  padding: 10px 14px;
+}
+
+.salary-breakdown-table td {
+  padding: 12px 14px;
+  vertical-align: middle;
+}
+
+/* Net Salary Highlight Box */
+.net-salary-highlight-box {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 2px solid #86efac;
+}
+
+.net-salary-highlight-box .display-6 {
+  font-size: 2.2rem;
+  letter-spacing: -0.5px;
+}
+
+/* Print Optimization */
 @media print {
-  .salary-slip .salary-slip-card {
-    box-shadow: none !important;
-    border: 1px solid #ddd !important;
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 12pt;
   }
-  
-  .salary-slip .btn {
+
+  /* Hide navigation, sidebar, top controls, buttons */
+  .no-print,
+  .sidebar,
+  .navbar,
+  header,
+  footer,
+  .btn,
+  .toast,
+  .modal {
     display: none !important;
+  }
+
+  .salary-slip-container {
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+  }
+
+  .salary-slip-card {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    page-break-inside: avoid;
+  }
+
+  .card-body {
+    padding: 0 !important;
+  }
+
+  /* Force background colors and borders in print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .net-salary-highlight-box {
+    border: 2px solid #16a34a !important;
+    background-color: #f0fdf4 !important;
+  }
+
+  .attendance-policy-banner {
+    background-color: #f8fafc !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+
+  .signatures-wrapper {
+    margin-top: 40px !important;
   }
 }
