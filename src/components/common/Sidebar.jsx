@@ -9,6 +9,7 @@ import {
   FaHandHoldingUsd, FaRegCalendarCheck
 } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
+import companyLogo from '../../assets/parakshtech_logo.jpg';
 import './Sidebar.css';
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
@@ -366,8 +367,8 @@ const handleLogout = (e) => {
     <div className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
       <div className="sidebar-header">
         <div className="logo-container">
-          <span className="logo-icon">📋</span>
-          <h3>LMS Panel</h3>
+          <img src={companyLogo} alt="PARAKSHTECH LLP" style={{ width: '32px', height: '32px', objectFit: 'contain', borderRadius: '6px', background: '#fff', padding: '2px' }} />
+          <h3 style={{ fontSize: '1.05rem', margin: 0 }}>PARAKSHTECH</h3>
         </div>
         <button className="close-sidebar" onClick={toggleSidebar}>
           <span>×</span>

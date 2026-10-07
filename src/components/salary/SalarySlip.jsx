@@ -12,6 +12,7 @@ import {
 } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
+import companyLogo from '../../assets/parakshtech_logo.jpg';
 import './SalarySlip.css';
 
 const MONTH_NAMES = [
@@ -527,11 +528,15 @@ const SalarySlip = () => {
               {/* Company Header */}
               <div className="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3 company-header-row">
                 <div className="d-flex align-items-center gap-3">
-                  <div className="company-logo-badge">
-                    <FaBuilding size={28} />
+                  <div className="company-logo-wrapper">
+                    <img 
+                      src={companyLogo} 
+                      alt="PARAKSHTECH LLP" 
+                      className="company-logo-img" 
+                    />
                   </div>
                   <div>
-                    <h3 className="fw-bold mb-1 text-dark company-name-title">PARAKSH TECHNOLOGIES</h3>
+                    <h3 className="fw-bold mb-1 text-dark company-name-title">PARAKSHTECH LLP</h3>
                     <div className="text-muted small contact-details-line" style={{ fontSize: '12px' }}>
                       <span>Email: <strong className="text-dark">hr@parakshtech.com</strong></span>
                       <span className="mx-2">•</span>
