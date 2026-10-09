@@ -13,9 +13,43 @@ import {
   FaCircle, FaStop, FaPalette, FaUserPlus, FaLink, FaMagic, FaUpload,
   FaCheckCircle, FaPlayCircle
 } from 'react-icons/fa';
+import { io } from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import './MeetingPanel.css';
+
+// Component to render remote peer's WebRTC video stream
+const RemoteParticipantVideo = ({ stream, isCameraOn, name, role, avatarBg }) => {
+  const videoRef = useRef(null);
+
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(e => console.warn('Remote video playback note:', e));
+    }
+  }, [stream, isCameraOn]);
+
+  if (!isCameraOn || !stream) {
+    return (
+      <div className="participant-avatar-placeholder">
+        <div className="participant-avatar-circle" style={{ background: avatarBg || '#10b981' }}>
+          {name?.charAt(0).toUpperCase()}
+        </div>
+        <div className="text-light small mt-2 fw-semibold">{name}</div>
+        <div className="text-muted" style={{ fontSize: '12px' }}>{role || 'Participant'}</div>
+      </div>
+    );
+  }
+
+  return (
+    <video 
+      ref={videoRef} 
+      autoPlay 
+      playsInline 
+      className="participant-video-element" 
+    />
+  );
+};
 
 // Professional Virtual Background Presets
 const BACKGROUND_PRESETS = [
@@ -99,6 +133,12 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
   const recordedChunksRef = useRef([]);
   const recordingTimerRef = useRef(null);
 
+  // Socket.IO & WebRTC real-time connection state
+  const socketRef = useRef(null);
+  const peersRef = useRef({}); // socketId -> RTCPeerConnection
+  const [remoteStreams, setRemoteStreams] = useState({}); // socketId -> MediaStream
+  const [remoteScreenShare, setRemoteScreenShare] = useState(null); // { socketId, name }
+
   // Drawers (Side Panel) State
   const [activeDrawer, setActiveDrawer] = useState(null); // 'chat' | 'documents' | 'participants' | 'backgrounds' | null
   const [unreadChatCount, setUnreadChatCount] = useState(0);
@@ -132,7 +172,7 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
     : (user?.employee?.first_name ? `${user.employee.first_name} ${user.employee.last_name || ''}` : (user?.email?.split('@')[0] || 'You'));
   const selfRole = isGuest ? 'Guest' : (user?.role === 'admin' ? 'Host (Admin)' : 'Participant');
 
-  // Only real registered participants in the meeting room
+  // Participants connected in this live conference room
   const [participants, setParticipants] = useState([
     {
       id: 'self',
@@ -146,53 +186,198 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
     }
   ]);
 
-  // Load registered employees invited to this meeting
+  // Connect to Socket.IO signaling server and sync live participants
   useEffect(() => {
-    if (meeting) {
-      let invitedList = [];
-      if (meeting.invited_employees) {
-        try {
-          invitedList = typeof meeting.invited_employees === 'string'
-            ? JSON.parse(meeting.invited_employees)
-            : meeting.invited_employees;
-        } catch (e) {
-          invitedList = [];
-        }
+    const socket = io('http://localhost:5000', {
+      transports: ['websocket', 'polling']
+    });
+    socketRef.current = socket;
+
+    // Join room
+    socket.emit('join-meeting', {
+      meetingId,
+      user: {
+        id: user?.id || (isGuest ? 'guest-' + Date.now() : 'user-' + Date.now()),
+        name: selfName,
+        role: selfRole,
+        isMicOn,
+        isCameraOn,
+        avatarBg: '#3b82f6'
       }
+    });
 
-      const colors = ['#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#6366f1'];
+    const createPeerConnection = (targetSocketId) => {
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+      });
 
-      if (Array.isArray(invitedList) && invitedList.length > 0) {
-        setParticipants(prev => {
-          const selfPart = prev.find(p => p.isLocal) || {
-            id: 'self',
-            name: selfName,
-            role: selfRole,
-            isLocal: true,
-            isMicOn: isMicOn,
-            isCameraOn: isCameraOn,
-            isSpeaking: false,
-            avatarBg: '#3b82f6'
-          };
-
-          const newOthers = invitedList
-            .filter(emp => emp.email !== user?.email && emp.name !== selfName)
-            .map((emp, idx) => ({
-              id: `emp-${emp.id || idx}`,
-              name: emp.name || `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || emp.email,
-              role: emp.role || emp.position || emp.department || 'Registered Employee',
-              isLocal: false,
-              isMicOn: false,
-              isCameraOn: false,
-              isSpeaking: false,
-              avatarBg: colors[idx % colors.length]
-            }));
-
-          return [selfPart, ...newOthers];
+      // Add local media tracks if available
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => {
+          pc.addTrack(track, localStreamRef.current);
         });
       }
-    }
-  }, [meeting, selfName, selfRole, user, isMicOn, isCameraOn]);
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit('signal', {
+            targetSocketId,
+            signal: { type: 'candidate', candidate: event.candidate }
+          });
+        }
+      };
+
+      pc.ontrack = (event) => {
+        if (event.streams && event.streams[0]) {
+          setRemoteStreams(prev => ({
+            ...prev,
+            [targetSocketId]: event.streams[0]
+          }));
+        }
+      };
+
+      peersRef.current[targetSocketId] = pc;
+      return pc;
+    };
+
+    // When we receive existing participants in the room
+    socket.on('current-participants', async (allInRoom) => {
+      const others = allInRoom.filter(p => p.socketId !== socket.id);
+
+      setParticipants(prev => {
+        const selfPart = prev.find(p => p.isLocal) || {
+          id: 'self',
+          socketId: socket.id,
+          name: selfName,
+          role: selfRole,
+          isLocal: true,
+          isMicOn,
+          isCameraOn,
+          isSpeaking: false,
+          avatarBg: '#3b82f6'
+        };
+
+        const otherParts = others.map(p => ({
+          ...p,
+          id: p.socketId,
+          isLocal: false,
+          isSpeaking: false
+        }));
+
+        return [selfPart, ...otherParts];
+      });
+
+      // As the newly joined peer, create an offer for each already existing peer
+      for (const peer of others) {
+        const pc = createPeerConnection(peer.socketId);
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socket.emit('signal', {
+            targetSocketId: peer.socketId,
+            signal: offer
+          });
+        } catch (e) {
+          console.warn('Error creating WebRTC offer:', e);
+        }
+      }
+    });
+
+    // When another peer joins the room
+    socket.on('user-joined', (newParticipant) => {
+      setParticipants(prev => {
+        if (prev.some(p => p.socketId === newParticipant.socketId)) return prev;
+        return [...prev, { ...newParticipant, id: newParticipant.socketId, isLocal: false }];
+      });
+    });
+
+    // Handle incoming WebRTC signaling (offer, answer, candidate)
+    socket.on('signal', async ({ fromSocketId, signal }) => {
+      let pc = peersRef.current[fromSocketId];
+
+      if (signal.type === 'offer') {
+        if (!pc) {
+          pc = createPeerConnection(fromSocketId);
+        }
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(signal));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          socket.emit('signal', {
+            targetSocketId: fromSocketId,
+            signal: answer
+          });
+        } catch (err) {
+          console.warn('WebRTC offer error:', err);
+        }
+      } else if (signal.type === 'answer') {
+        if (pc) {
+          try {
+            await pc.setRemoteDescription(new RTCSessionDescription(signal));
+          } catch (err) {
+            console.warn('WebRTC answer error:', err);
+          }
+        }
+      } else if (signal.type === 'candidate') {
+        if (pc && signal.candidate) {
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+          } catch (err) {
+            console.warn('ICE candidate error:', err);
+          }
+        }
+      }
+    });
+
+    // Peer toggled mic/camera in real-time
+    socket.on('user-media-updated', ({ socketId, isMicOn: peerMic, isCameraOn: peerCam }) => {
+      setParticipants(prev => prev.map(p => 
+        p.socketId === socketId ? { ...p, isMicOn: peerMic, isCameraOn: peerCam } : p
+      ));
+    });
+
+    // Peer toggled screen share in real-time
+    socket.on('user-screen-share-updated', ({ socketId, name, isSharing }) => {
+      if (isSharing) {
+        setRemoteScreenShare({ socketId, name });
+      } else {
+        setRemoteScreenShare(prev => prev?.socketId === socketId ? null : prev);
+      }
+    });
+
+    // Peer sent a chat message
+    socket.on('new-message', (incomingMsg) => {
+      setMessages(prev => {
+        if (prev.some(m => m.id === incomingMsg.id)) return prev;
+        return [...prev, incomingMsg];
+      });
+    });
+
+    // Peer left the room
+    socket.on('user-left', ({ socketId }) => {
+      setParticipants(prev => prev.filter(p => p.socketId !== socketId));
+      if (peersRef.current[socketId]) {
+        peersRef.current[socketId].close();
+        delete peersRef.current[socketId];
+      }
+      setRemoteStreams(prev => {
+        const copy = { ...prev };
+        delete copy[socketId];
+        return copy;
+      });
+      setRemoteScreenShare(prev => prev?.socketId === socketId ? null : prev);
+    });
+
+    return () => {
+      socket.emit('leave-meeting');
+      socket.disconnect();
+      Object.values(peersRef.current).forEach(pc => pc.close());
+      peersRef.current = {};
+    };
+  }, [meetingId, selfName, selfRole, user, isGuest]);
 
   // Fetch Meeting Details
   useEffect(() => {
@@ -252,6 +437,12 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
           if (localVideoRef.current) {
             localVideoRef.current.srcObject = stream;
           }
+          // Attach local tracks to any already-connected peers
+          Object.values(peersRef.current).forEach(pc => {
+            stream.getTracks().forEach(track => {
+              pc.addTrack(track, stream);
+            });
+          });
         }
       } catch (err) {
         console.warn('Camera/Mic permission warning:', err);
@@ -261,6 +452,11 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
           if (isMounted) {
             localStreamRef.current = audioOnly;
             setIsCameraOn(false);
+            Object.values(peersRef.current).forEach(pc => {
+              audioOnly.getTracks().forEach(track => {
+                pc.addTrack(track, audioOnly);
+              });
+            });
           }
         } catch (audioErr) {
           console.warn('No media devices available, joining in viewer mode:', audioErr);
@@ -294,36 +490,42 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
 
   // Toggle Microphone
   const toggleMicrophone = () => {
+    const nextState = !isMicOn;
     if (localStreamRef.current) {
       const audioTracks = localStreamRef.current.getAudioTracks();
       if (audioTracks.length > 0) {
-        const nextState = !isMicOn;
         audioTracks.forEach(track => {
           track.enabled = nextState;
         });
-        setIsMicOn(nextState);
-        setParticipants(prev => prev.map(p => p.isLocal ? { ...p, isMicOn: nextState } : p));
       }
-    } else {
-      setIsMicOn(!isMicOn);
     }
+    setIsMicOn(nextState);
+    setParticipants(prev => prev.map(p => p.isLocal ? { ...p, isMicOn: nextState } : p));
+    socketRef.current?.emit('media-toggle', {
+      meetingId,
+      isMicOn: nextState,
+      isCameraOn
+    });
   };
 
   // Toggle Camera
   const toggleCamera = () => {
+    const nextState = !isCameraOn;
     if (localStreamRef.current) {
       const videoTracks = localStreamRef.current.getVideoTracks();
       if (videoTracks.length > 0) {
-        const nextState = !isCameraOn;
         videoTracks.forEach(track => {
           track.enabled = nextState;
         });
-        setIsCameraOn(nextState);
-        setParticipants(prev => prev.map(p => p.isLocal ? { ...p, isCameraOn: nextState } : p));
       }
-    } else {
-      setIsCameraOn(!isCameraOn);
     }
+    setIsCameraOn(nextState);
+    setParticipants(prev => prev.map(p => p.isLocal ? { ...p, isCameraOn: nextState } : p));
+    socketRef.current?.emit('media-toggle', {
+      meetingId,
+      isMicOn,
+      isCameraOn: nextState
+    });
   };
 
   // Synchronize Screen Sharing Video Stream to DOM
@@ -349,6 +551,23 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
         screenStreamRef.current = screenStream;
         setIsScreenSharing(true);
 
+        // Replace video track in all active RTCPeerConnections with screen share track
+        const screenTrack = screenStream.getVideoTracks()[0];
+        if (screenTrack) {
+          Object.values(peersRef.current).forEach(pc => {
+            const senders = pc.getSenders();
+            const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+            if (videoSender) {
+              videoSender.replaceTrack(screenTrack).catch(e => console.warn('replaceTrack screen share error:', e));
+            }
+          });
+        }
+
+        socketRef.current?.emit('screen-share-toggle', {
+          meetingId,
+          isSharing: true
+        });
+
         setTimeout(() => {
           if (screenVideoRef.current && screenStreamRef.current) {
             screenVideoRef.current.srcObject = screenStreamRef.current;
@@ -357,9 +576,8 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
         }, 100);
 
         // Handle user clicking "Stop sharing" from browser native chrome banner
-        const videoTrack = screenStream.getVideoTracks()[0];
-        if (videoTrack) {
-          videoTrack.onended = () => {
+        if (screenTrack) {
+          screenTrack.onended = () => {
             stopScreenShare();
           };
         }
@@ -376,6 +594,21 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
       screenStreamRef.current = null;
     }
     setIsScreenSharing(false);
+
+    // Revert video track in all active RTCPeerConnections back to local camera track
+    const camTrack = localStreamRef.current?.getVideoTracks()[0] || null;
+    Object.values(peersRef.current).forEach(pc => {
+      const senders = pc.getSenders();
+      const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+      if (videoSender && camTrack) {
+        videoSender.replaceTrack(camTrack).catch(e => console.warn('replaceTrack revert camera error:', e));
+      }
+    });
+
+    socketRef.current?.emit('screen-share-toggle', {
+      meetingId,
+      isSharing: false
+    });
   };
 
   // Fullscreen Toggle
@@ -452,22 +685,29 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
     try {
       const res = await api.post(`/meetings/${meetingId}/messages`, msgPayload);
       if (res.data && res.data.success) {
-        setMessages(prev => [...prev, res.data.data]);
+        const savedMsg = res.data.data;
+        setMessages(prev => [...prev, savedMsg]);
+        socketRef.current?.emit('send-message', {
+          meetingId,
+          message: savedMsg
+        });
         setChatInput('');
       }
     } catch (err) {
       // Offline fallback
-      setMessages(prev => [
-        ...prev, 
-        { 
-          id: Date.now(), 
-          meeting_id: meetingId, 
-          sender_name: myName, 
-          sender_role: myRole,
-          message: chatInput.trim(),
-          createdAt: new Date().toISOString()
-        }
-      ]);
+      const fallbackMsg = { 
+        id: Date.now(), 
+        meeting_id: meetingId, 
+        sender_name: myName, 
+        sender_role: myRole,
+        message: chatInput.trim(),
+        createdAt: new Date().toISOString()
+      };
+      setMessages(prev => [...prev, fallbackMsg]);
+      socketRef.current?.emit('send-message', {
+        meetingId,
+        message: fallbackMsg
+      });
       setChatInput('');
     } finally {
       setSendingMsg(false);
@@ -752,30 +992,45 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
         
         {/* Stage Wrapper */}
         <div className="video-stage-wrapper">
-          {/* When Screen Share is Active, Show Spotlight Stage */}
-          {isScreenSharing ? (
+          {/* When Local or Remote Screen Share is Active, Show Spotlight Stage */}
+          {(isScreenSharing || remoteScreenShare) ? (
             <>
               <div className="screen-share-spotlight">
                 <div className="screen-share-banner">
                   <FaDesktop />
-                  <span>You are sharing your screen</span>
-                  <Button 
-                    variant="danger" 
-                    size="sm" 
-                    onClick={stopScreenShare}
-                    className="py-0 px-2 ms-2 fw-semibold"
-                    style={{ fontSize: '11px' }}
-                  >
-                    Stop Sharing
-                  </Button>
+                  {isScreenSharing ? (
+                    <>
+                      <span>You are sharing your screen</span>
+                      <Button 
+                        variant="danger" 
+                        size="sm" 
+                        onClick={stopScreenShare}
+                        className="py-0 px-2 ms-2 fw-semibold"
+                        style={{ fontSize: '11px' }}
+                      >
+                        Stop Sharing
+                      </Button>
+                    </>
+                  ) : (
+                    <span>{remoteScreenShare?.name || 'A participant'} is sharing their screen</span>
+                  )}
                 </div>
-                <video 
-                  ref={screenVideoRef} 
-                  autoPlay 
-                  playsInline 
-                  muted
-                  className="screen-share-video" 
-                />
+                {isScreenSharing ? (
+                  <video 
+                    ref={screenVideoRef} 
+                    autoPlay 
+                    playsInline 
+                    muted
+                    className="screen-share-video" 
+                  />
+                ) : (
+                  <RemoteParticipantVideo 
+                    stream={remoteStreams[remoteScreenShare?.socketId]}
+                    isCameraOn={true}
+                    name={remoteScreenShare?.name || 'Presenter'}
+                    role="Screen Share"
+                  />
+                )}
               </div>
 
               {/* Bottom Filmstrip of Participants during screen share */}
@@ -793,14 +1048,16 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
                         </div>
                       )
                     ) : (
-                      <div className="participant-avatar-placeholder">
-                        <div className="participant-avatar-circle" style={{ width: '48px', height: '48px', fontSize: '18px', background: p.avatarBg }}>
-                          {p.name.charAt(0).toUpperCase()}
-                        </div>
-                      </div>
+                      <RemoteParticipantVideo 
+                        stream={remoteStreams[p.socketId || p.id]} 
+                        isCameraOn={p.isCameraOn} 
+                        name={p.name} 
+                        role={p.role} 
+                        avatarBg={p.avatarBg} 
+                      />
                     )}
                     <div className="tile-overlay-info py-0 px-2" style={{ fontSize: '11px' }}>
-                      <span>{p.name}</span>
+                      <span>{p.name} {p.isLocal && '(You)'}</span>
                     </div>
                   </div>
                 ))}
@@ -856,13 +1113,13 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
                       </div>
                     )
                   ) : (
-                    <div className="participant-avatar-placeholder">
-                      <div className="participant-avatar-circle" style={{ background: p.avatarBg }}>
-                        {p.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="text-light small mt-2 fw-semibold">{p.name}</div>
-                      <div className="text-muted" style={{ fontSize: '12px' }}>{p.role}</div>
-                    </div>
+                    <RemoteParticipantVideo
+                      stream={remoteStreams[p.socketId || p.id]}
+                      isCameraOn={p.isCameraOn}
+                      name={p.name}
+                      role={p.role}
+                      avatarBg={p.avatarBg}
+                    />
                   )}
 
                   {/* Top Status Icons */}
