@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 
 // Define role-based route access
 const ROLE_ROUTES = {
-  admin: ['/dashboard', '/employees', '/employees/*', '/profile', '/profile/*', '/leave', '/leave/*', '/attendance', '/salary', '/salary/*', '/policies', '/policies/*', '/holidays', '/payments', '/performance', '/performance/*', '/meetings', '/meetings/*', '/reports', '/settings'],
+  admin: ['/dashboard', '/employees', '/employees/*', '/profile', '/profile/*', '/leave', '/leave/*', '/attendance', '/salary', '/salary/*', '/policies', '/policies/*', '/holidays', '/payments', '/performance', '/performance/*', '/meetings', '/meetings/*', '/letters', '/letters/*', '/reports', '/settings'],
   hr: ['/dashboard', '/employees', '/employees/*', '/profile', '/profile/*', '/leave', '/leave/*', '/attendance', '/salary', '/salary/*', '/policies', '/policies/*', '/holidays', '/payments', '/performance', '/performance/*', '/meetings', '/meetings/*'],
   manager: ['/dashboard', '/employees', '/employees/*', '/profile', '/profile/*', '/leave', '/leave/*', '/attendance', '/salary', '/salary/*', '/policies', '/policies/*', '/holidays', '/performance', '/performance/*', '/meetings', '/meetings/*'],
   sales: ['/dashboard', '/profile', '/profile/*', '/leave', '/leave/*', '/attendance', '/salary', '/salary/*', '/policies', '/policies/*', '/holidays', '/meetings', '/meetings/*'],

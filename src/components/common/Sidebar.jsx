@@ -134,6 +134,12 @@ const handleLogout = (e) => {
           icon: <FaChartBar />, 
           label: 'Performance',
           allowedRoles: ['admin', 'hr', 'manager']
+        },
+        { 
+          path: '/letters', 
+          icon: <FaFileAlt />, 
+          label: 'Offer & Joining Letters',
+          allowedRoles: ['admin']
         }
       ],
       hr: [

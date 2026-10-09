@@ -34,6 +34,7 @@ import Performance from './components/performance/Performance';
 import PerformanceReview from './components/performance/PerformanceReview';
 import MeetingPanel from './components/meetings/MeetingPanel';
 import GuestMeetingJoin from './components/meetings/GuestMeetingJoin';
+import LetterList from './components/letter/LetterList';
 
 function App() {
   return (
@@ -84,6 +85,7 @@ function App() {
               {/* Other Routes */}
               <Route path="holidays" element={<HolidayCalendar />} />
               <Route path="payments" element={<PaymentHistory />} />
+              <Route path="letters" element={<LetterList />} />
             </Route>
           </Route>
         </Routes>

@@ -1,0 +1,92 @@
+/* Letters Management Styles */
+
+.letter-management-container {
+  padding: 24px;
+  background-color: #f8fafc;
+  min-height: calc(100vh - 70px);
+}
+
+.letters-stat-card {
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.letters-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.letter-table-card {
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.letter-type-badge-offer {
+  background-color: #fee2e2;
+  color: #991b1b;
+  font-weight: 600;
+  border: 1px solid #fecaca;
+}
+
+.letter-type-badge-joining {
+  background-color: #dbeafe;
+  color: #1e40af;
+  font-weight: 600;
+  border: 1px solid #bfdbfe;
+}
+
+.letter-type-badge-experience {
+  background-color: #f3e8ff;
+  color: #6b21a8;
+  font-weight: 600;
+  border: 1px solid #e9d5ff;
+}
+
+/* Modal Styling */
+.letter-preview-modal .modal-dialog {
+  max-width: 900px;
+}
+
+.letter-preview-modal .modal-body {
+  background-color: #e2e8f0;
+  padding: 20px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+/* Print Specific Rules */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  
+  .letter-preview-print-area,
+  .letter-preview-print-area * {
+    visibility: visible !important;
+  }
+
+  .letter-preview-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 210mm !important;
+    height: 297mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+}
+
