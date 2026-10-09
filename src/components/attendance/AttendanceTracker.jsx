@@ -99,6 +99,15 @@ const AttendanceTracker = () => {
   const [checkingIn, setCheckingIn] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
   const [selfLoading, setSelfLoading] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Live ticking clock for accurate current time display
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Initial fetch for Daily Panel (Admins/HR only)
   useEffect(() => {
@@ -149,7 +158,10 @@ const AttendanceTracker = () => {
   const fetchSelfAttendance = async () => {
     try {
       setSelfLoading(true);
-      const statsRes = await api.get('/attendance/stats').catch(() => ({ data: { data: {} } }));
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+      const statsRes = await api.get('/attendance/stats', { params: { date: dateStr } }).catch(() => ({ data: { data: {} } }));
       setMyStats(statsRes.data?.data || null);
     } catch (err) {
       console.error('Error fetching personal attendance:', err);
@@ -293,14 +305,23 @@ const AttendanceTracker = () => {
     document.body.removeChild(link);
   };
 
-  // Personal check-in / check-out
-  const handleCheckIn = async () => {
+  // Personal check-in / check-out with client's exact current time
+  const handleCheckIn = async (allowUpdate = false) => {
     try {
       setCheckingIn(true);
-      await api.post('/attendance/check-in');
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+      const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+      await api.post('/attendance/check-in', {
+        time: timeStr,
+        date: dateStr,
+        allowUpdate: !!allowUpdate
+      });
       fetchSelfAttendance();
       fetchSelfMonthlyAttendance(selfYear, selfMonth, selfStatusFilter, selfDateSearch);
-      if (isAdminOrHR) fetchDailyAttendance(selectedDate);
+      if (isAdminOrHR) fetchDailyAttendance(selectedDate || dateStr);
     } catch (error) {
       alert(error.response?.data?.message || 'Failed to check in');
     } finally {
@@ -308,13 +329,22 @@ const AttendanceTracker = () => {
     }
   };
 
-  const handleCheckOut = async () => {
+  const handleCheckOut = async (allowUpdate = false) => {
     try {
       setCheckingOut(true);
-      await api.post('/attendance/check-out');
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+      const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+      await api.post('/attendance/check-out', {
+        time: timeStr,
+        date: dateStr,
+        allowUpdate: !!allowUpdate
+      });
       fetchSelfAttendance();
       fetchSelfMonthlyAttendance(selfYear, selfMonth, selfStatusFilter, selfDateSearch);
-      if (isAdminOrHR) fetchDailyAttendance(selectedDate);
+      if (isAdminOrHR) fetchDailyAttendance(selectedDate || dateStr);
     } catch (error) {
       alert(error.response?.data?.message || 'Failed to check out');
     } finally {
@@ -921,9 +951,15 @@ const AttendanceTracker = () => {
               <Card className="attendance-action-card h-100 shadow-sm border-0">
                 <Card.Body className="d-flex flex-column justify-content-between p-4">
                   <div className="d-flex justify-content-between align-items-center mb-3">
-                    <h5 className="card-title fw-bold mb-0">Today's Punch Status</h5>
+                    <div>
+                      <h5 className="card-title fw-bold mb-0">Today's Punch Status</h5>
+                      <div className="small text-primary fw-semibold mt-1 d-flex align-items-center gap-1">
+                        <FaClock size={12} />
+                        <span>Current Time: <strong>{currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}</strong></span>
+                      </div>
+                    </div>
                     <Badge bg="light" className="text-secondary border py-2 px-3">
-                      <FaCalendarDay className="me-1 text-primary" /> {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                      <FaCalendarDay className="me-1 text-primary" /> {currentTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
                     </Badge>
                   </div>
 
@@ -937,14 +973,26 @@ const AttendanceTracker = () => {
                         <p className="text-muted mb-3">
                           First punch recorded at: <strong className="text-dark font-monospace fs-5">{myStats?.checkInTime}</strong>
                         </p>
-                        <Button 
-                          variant="danger" 
-                          onClick={handleCheckOut}
-                          disabled={checkingOut}
-                          className="px-4 py-2 shadow-sm fw-semibold"
-                        >
-                          {checkingOut ? <><Spinner size="sm" className="me-2" />Recording Departure...</> : 'Punch Check Out'}
-                        </Button>
+                        <div className="d-flex flex-column align-items-center gap-2">
+                          <Button 
+                            variant="danger" 
+                            onClick={() => handleCheckOut(false)}
+                            disabled={checkingOut}
+                            className="px-4 py-2 shadow-sm fw-semibold"
+                          >
+                            {checkingOut ? <><Spinner size="sm" className="me-2" />Recording Departure...</> : `Punch Check Out (${currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })})`}
+                          </Button>
+                          <Button
+                            variant="link"
+                            size="sm"
+                            className="text-muted text-decoration-none p-0 mt-1"
+                            onClick={() => handleCheckIn(true)}
+                            disabled={checkingIn}
+                            title="Update check in punch to current time"
+                          >
+                            <small>↻ Update Check In to Current Time</small>
+                          </Button>
+                        </div>
                       </>
                     ) : myStats?.todayStatus === 'checked-out' ? (
                       <>
@@ -955,9 +1003,21 @@ const AttendanceTracker = () => {
                         <p className="text-muted mb-3">
                           Checked out at: <strong className="text-dark font-monospace fs-5">{myStats?.checkOutTime}</strong>
                         </p>
-                        <Badge bg="success" className="py-2 px-3 fs-6">
-                          ✓ Today's punches recorded
-                        </Badge>
+                        <div className="d-flex flex-column align-items-center gap-2">
+                          <Badge bg="success" className="py-2 px-3 fs-6">
+                            ✓ Today's punches recorded
+                          </Badge>
+                          <Button
+                            variant="link"
+                            size="sm"
+                            className="text-muted text-decoration-none p-0 mt-1"
+                            onClick={() => handleCheckOut(true)}
+                            disabled={checkingOut}
+                            title="Update check out punch to current time"
+                          >
+                            <small>↻ Update Check Out to Current Time</small>
+                          </Button>
+                        </div>
                       </>
                     ) : (
                       <>
@@ -970,11 +1030,11 @@ const AttendanceTracker = () => {
                         </p>
                         <Button 
                           variant="primary" 
-                          onClick={handleCheckIn}
+                          onClick={() => handleCheckIn(false)}
                           disabled={checkingIn}
                           className="px-4 py-2 shadow-sm fw-semibold"
                         >
-                          {checkingIn ? <><Spinner size="sm" className="me-2" />Recording Arrival...</> : 'Punch Check In'}
+                          {checkingIn ? <><Spinner size="sm" className="me-2" />Recording Arrival...</> : `Punch Check In (${currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })})`}
                         </Button>
                       </>
                     )}
