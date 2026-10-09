@@ -19,7 +19,8 @@ import api from '../../services/api';
 import './MeetingPanel.css';
 
 // Component to render remote peer's WebRTC video and audio streams
-const RemoteParticipantVideo = ({ stream, isCameraOn, name, role, avatarBg }) => {
+// Component to render remote peer's WebRTC video and audio streams
+const RemoteParticipantVideo = ({ stream, isCameraOn, name, role, avatarBg, isScreenShare = false }) => {
   const videoRef = useRef(null);
   const audioRef = useRef(null);
 
@@ -37,6 +38,27 @@ const RemoteParticipantVideo = ({ stream, isCameraOn, name, role, avatarBg }) =>
     }
   }, [stream]);
 
+  // Listen for newly added or removed tracks on this stream dynamically
+  useEffect(() => {
+    if (!stream) return;
+    const handleTrackChange = () => {
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
+      }
+      if (audioRef.current) {
+        audioRef.current.srcObject = stream;
+        audioRef.current.play().catch(() => {});
+      }
+    };
+    stream.addEventListener('addtrack', handleTrackChange);
+    stream.addEventListener('removetrack', handleTrackChange);
+    return () => {
+      stream.removeEventListener('addtrack', handleTrackChange);
+      stream.removeEventListener('removetrack', handleTrackChange);
+    };
+  }, [stream]);
+
   // Audio unlock listener on user interaction
   useEffect(() => {
     const unlockAudio = () => {
@@ -52,23 +74,32 @@ const RemoteParticipantVideo = ({ stream, isCameraOn, name, role, avatarBg }) =>
     };
   }, []);
 
+  const showVideo = (isCameraOn || isScreenShare) && !!stream;
+
   return (
-    <div className="participant-remote-container w-100 h-100 position-relative d-flex align-items-center justify-content-center">
+    <div className="participant-remote-container w-100 h-100 position-relative d-flex align-items-center justify-content-center overflow-hidden">
       {/* Audio element ensures remote peer voice is ALWAYS heard even if camera is turned off */}
       <audio ref={audioRef} autoPlay playsInline />
 
-      {/* Video element is muted so browser autoplay policy NEVER blocks remote video/screen frames */}
+      {/* Video element is kept active in DOM with opacity so browser hardware decoder never halts */}
       <video 
         ref={videoRef} 
         autoPlay 
         playsInline 
         muted
         className="participant-video-element" 
-        style={{ display: (isCameraOn && stream) ? 'block' : 'none', width: '100%', height: '100%', objectFit: 'cover' }}
+        style={{ 
+          opacity: showVideo ? 1 : 0,
+          position: showVideo ? 'static' : 'absolute',
+          pointerEvents: showVideo ? 'auto' : 'none',
+          width: '100%', 
+          height: '100%', 
+          objectFit: isScreenShare ? 'contain' : 'cover' 
+        }}
       />
 
       {/* Avatar placeholder shown when camera is off or stream is establishing */}
-      {(!isCameraOn || !stream) && (
+      {!showVideo && (
         <div className="participant-avatar-placeholder">
           <div className="participant-avatar-circle" style={{ background: avatarBg || '#10b981' }}>
             {name?.charAt(0).toUpperCase()}
@@ -266,7 +297,9 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
         console.log(`[WebRTC] Flushing ${queue.length} ICE candidates for peer: ${targetId}`);
         for (const cand of queue) {
           try {
-            await pc.addIceCandidate(new RTCIceCandidate(cand));
+            if (cand && (cand.candidate || cand.sdpMid !== undefined)) {
+              await pc.addIceCandidate(new RTCIceCandidate(cand));
+            }
           } catch (e) {
             console.warn('[WebRTC] ICE candidate flush note:', e);
           }
@@ -284,21 +317,27 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
       console.log(`[WebRTC] Creating RTCPeerConnection for: ${targetSocketId}`);
       const pc = new RTCPeerConnection({
         iceServers: [
+          // Dedicated Production LMS TURN / STUN Servers (Contabo VPS 173.212.235.87)
+          { urls: 'stun:lms.parakshtech.com:3478' },
+          { urls: 'stun:173.212.235.87:3478' },
+          {
+            urls: [
+              'turn:lms.parakshtech.com:3478?transport=udp',
+              'turn:lms.parakshtech.com:3478?transport=tcp',
+              'turn:173.212.235.87:3478?transport=udp',
+              'turn:173.212.235.87:3478?transport=tcp',
+              'turns:lms.parakshtech.com:5349?transport=tcp'
+            ],
+            username: 'paraksh',
+            credential: 'LmsMeeting2026Turn!'
+          },
+          // Global Fallback Public STUN Servers
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
           { urls: 'stun:stun2.l.google.com:19302' },
-          { urls: 'stun:stun.cloudflare.com:3478' },
-          {
-            urls: [
-              'turn:openrelay.metered.ca:80',
-              'turn:openrelay.metered.ca:80?transport=tcp',
-              'turn:openrelay.metered.ca:443',
-              'turn:openrelay.metered.ca:443?transport=tcp'
-            ],
-            username: 'openrelay',
-            credential: 'openrelay'
-          }
-        ]
+          { urls: 'stun:stun.cloudflare.com:3478' }
+        ],
+        iceCandidatePoolSize: 10
       });
 
       pc.onconnectionstatechange = () => {
@@ -306,13 +345,27 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
       };
       pc.oniceconnectionstatechange = () => {
         console.log(`[WebRTC] Peer ${targetSocketId} iceConnectionState:`, pc.iceConnectionState);
+        if (pc.iceConnectionState === 'failed') {
+          console.warn(`[WebRTC] Peer ${targetSocketId} ICE connection failed, restarting ICE`);
+          try {
+            if (typeof pc.restartIce === 'function') {
+              pc.restartIce();
+            }
+          } catch (iceErr) {
+            console.warn('[WebRTC] restartIce error:', iceErr);
+          }
+        }
       };
 
       // Add existing local tracks to this peer connection
       const activeStream = isScreenSharing && screenStreamRef.current ? screenStreamRef.current : localStreamRef.current;
       if (activeStream && activeStream.getTracks().length > 0) {
         activeStream.getTracks().forEach(track => {
-          pc.addTrack(track, activeStream);
+          try {
+            pc.addTrack(track, activeStream);
+          } catch (tErr) {
+            console.warn('[WebRTC] addTrack note:', tErr);
+          }
         });
       } else {
         // Add sendrecv transceivers as fallbacks so SDP negotiation includes media sections
@@ -326,7 +379,7 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
 
       // Send local ICE candidates to the remote peer
       pc.onicecandidate = (event) => {
-        if (event.candidate) {
+        if (event.candidate && event.candidate.candidate) {
           socket.emit('signal', {
             targetSocketId,
             signal: { type: 'candidate', candidate: event.candidate }
@@ -336,20 +389,24 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
 
       // Receive remote tracks and store into remoteStreams state
       pc.ontrack = (event) => {
-        console.log(`[WebRTC] Received remote track (${event.track.kind}) from ${targetSocketId}`);
-        const stream = (event.streams && event.streams[0]) 
+        console.log(`[WebRTC] Received remote track (${event.track.kind}) from ${targetSocketId}`, event.track.id);
+        const incomingStream = (event.streams && event.streams[0]) 
           ? event.streams[0] 
           : new MediaStream([event.track]);
 
         setRemoteStreams(prev => {
           const existing = prev[targetSocketId];
+          let updatedStream;
           if (existing) {
             if (!existing.getTracks().some(t => t.id === event.track.id)) {
               existing.addTrack(event.track);
             }
-            return { ...prev, [targetSocketId]: existing };
+            // Return fresh MediaStream instance with all tracks so React detects state change
+            updatedStream = new MediaStream(existing.getTracks());
+          } else {
+            updatedStream = incomingStream;
           }
-          return { ...prev, [targetSocketId]: stream };
+          return { ...prev, [targetSocketId]: updatedStream };
         });
       };
 
@@ -492,7 +549,10 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
         } catch (err) {
           console.warn('WebRTC answer handling error:', err);
         }
-      } else if (signal.type === 'candidate') {
+      } else if (signal.type === 'candidate' && signal.candidate) {
+        if (!signal.candidate.candidate && signal.candidate.sdpMid === undefined) {
+          return;
+        }
         if (pc && pc.remoteDescription && pc.remoteDescription.type) {
           try {
             await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
@@ -682,12 +742,17 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
         if (screenTrack) {
           Object.values(peersRef.current).forEach(pc => {
             try {
-              pc.getTransceivers().forEach(transceiver => {
-                const kind = transceiver.receiver.track.kind || (transceiver.sender.track && transceiver.sender.track.kind);
-                if (kind === 'video') {
-                  transceiver.sender.replaceTrack(screenTrack).catch(e => console.warn('replaceTrack screen share error:', e));
-                }
-              });
+              const videoSender = pc.getSenders()?.find(s => s.track && s.track.kind === 'video') || pc.getSenders()?.find(s => s.track === null);
+              if (videoSender) {
+                videoSender.replaceTrack(screenTrack).catch(e => console.warn('replaceTrack screen share sender error:', e));
+              } else {
+                pc.getTransceivers?.().forEach(transceiver => {
+                  const kind = transceiver.receiver?.track?.kind || transceiver.sender?.track?.kind;
+                  if (kind === 'video' && transceiver.sender) {
+                    transceiver.sender.replaceTrack(screenTrack).catch(e => console.warn('replaceTrack screen share error:', e));
+                  }
+                });
+              }
             } catch (err) {
               console.warn('Screen share replace error:', err);
             }
@@ -730,12 +795,17 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
     const camTrack = localStreamRef.current?.getVideoTracks()[0] || null;
     Object.values(peersRef.current).forEach(pc => {
       try {
-        pc.getTransceivers().forEach(transceiver => {
-          const kind = transceiver.receiver.track.kind || (transceiver.sender.track && transceiver.sender.track.kind);
-          if (kind === 'video') {
-            transceiver.sender.replaceTrack(camTrack).catch(e => console.warn('replaceTrack revert camera error:', e));
-          }
-        });
+        const videoSender = pc.getSenders()?.find(s => s.track && s.track.kind === 'video') || pc.getSenders()?.find(s => s.track === null);
+        if (videoSender) {
+          videoSender.replaceTrack(camTrack).catch(e => console.warn('replaceTrack revert camera error:', e));
+        } else {
+          pc.getTransceivers?.().forEach(transceiver => {
+            const kind = transceiver.receiver?.track?.kind || transceiver.sender?.track?.kind;
+            if (kind === 'video' && transceiver.sender) {
+              transceiver.sender.replaceTrack(camTrack).catch(e => console.warn('replaceTrack revert camera error:', e));
+            }
+          });
+        }
       } catch (err) {
         console.warn('Revert camera error:', err);
       }
@@ -1165,6 +1235,7 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
                     isCameraOn={true}
                     name={remoteScreenShare?.name || 'Presenter'}
                     role="Screen Share"
+                    isScreenShare={true}
                   />
                 )}
               </div>
