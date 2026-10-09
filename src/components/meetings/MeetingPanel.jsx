@@ -8,7 +8,7 @@ import {
   FaVideo, FaCalendarPlus, FaSignInAlt, FaDesktop, 
   FaComments, FaPaperclip, FaUsers, FaClock, 
   FaCopy, FaCheck, FaTrash, FaPlay, FaCalendarAlt, 
-  FaSearch, FaFilter, FaBuilding, FaLock, FaGlobe
+  FaSearch, FaFilter, FaBuilding, FaLock, FaGlobe, FaUserPlus
 } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
@@ -60,6 +60,7 @@ const MeetingPanel = () => {
   });
   const [scheduling, setScheduling] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
+  const [copiedGuestId, setCopiedGuestId] = useState(null);
 
   // Fetch Meetings
   const fetchMeetings = async () => {
@@ -185,6 +186,15 @@ const MeetingPanel = () => {
     navigator.clipboard.writeText(link).then(() => {
       setCopiedId(mId);
       setTimeout(() => setCopiedId(null), 2500);
+    });
+  };
+
+  // Copy Public Guest Join Link
+  const handleCopyGuestLink = (mId) => {
+    const guestLink = `${window.location.origin}/meeting/guest/${mId}`;
+    navigator.clipboard.writeText(guestLink).then(() => {
+      setCopiedGuestId(mId);
+      setTimeout(() => setCopiedGuestId(null), 2500);
     });
   };
 
@@ -505,11 +515,23 @@ const MeetingPanel = () => {
                             variant="outline-secondary" 
                             size="sm"
                             onClick={() => handleCopyLink(m.meeting_id)}
-                            title="Copy meeting invite link"
+                            title="Copy internal meeting invite link"
                             className="d-flex align-items-center gap-1"
                           >
                             {copiedId === m.meeting_id ? <FaCheck className="text-success" /> : <FaCopy />}
                             <span>{copiedId === m.meeting_id ? 'Copied' : 'Invite'}</span>
+                          </Button>
+
+                          {/* Copy Guest Link Action */}
+                          <Button 
+                            variant="outline-info" 
+                            size="sm"
+                            onClick={() => handleCopyGuestLink(m.meeting_id)}
+                            title="Copy link for external guests & clients (no login needed)"
+                            className="d-flex align-items-center gap-1 border-info"
+                          >
+                            {copiedGuestId === m.meeting_id ? <FaCheck className="text-success" /> : <FaUserPlus />}
+                            <span>{copiedGuestId === m.meeting_id ? 'Copied' : 'Guest Link'}</span>
                           </Button>
                         </div>
 

@@ -2,20 +2,71 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Button, Badge, Spinner, Alert, Form, 
-  InputGroup, OverlayTrigger, Tooltip 
+  InputGroup, OverlayTrigger, Tooltip, Modal 
 } from 'react-bootstrap';
 import { 
   FaVideo, FaVideoSlash, FaMicrophone, FaMicrophoneSlash, 
   FaDesktop, FaComments, FaPaperclip, FaPhoneSlash, 
   FaCopy, FaCheck, FaUsers, FaArrowLeft, FaDownload, 
   FaFileUpload, FaFileAlt, FaFilePdf, FaFileWord, 
-  FaFileExcel, FaImage, FaTimes, FaShieldAlt, FaExpand, FaCompress
+  FaFileExcel, FaImage, FaTimes, FaShieldAlt, FaExpand, FaCompress,
+  FaCircle, FaStop, FaPalette, FaUserPlus, FaLink, FaMagic, FaUpload,
+  FaCheckCircle, FaPlayCircle
 } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import './MeetingPanel.css';
 
-const MeetingRoom = ({ meetingData: initialMeeting, onLeave }) => {
+// Professional Virtual Background Presets
+const BACKGROUND_PRESETS = [
+  { id: 'none', label: 'None', type: 'none', icon: '🚫', thumbnail: '' },
+  { id: 'blur-soft', label: 'Subtle Blur', type: 'blur', blurAmount: '12px', icon: '🌫️', thumbnail: '' },
+  { id: 'blur-heavy', label: 'Studio Bokeh', type: 'blur', blurAmount: '24px', icon: '✨', thumbnail: '' },
+  { 
+    id: 'office', 
+    label: 'Executive Boardroom', 
+    type: 'image', 
+    url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1000&q=80',
+    icon: '🏢' 
+  },
+  { 
+    id: 'minimalist', 
+    label: 'Modern Open Office', 
+    type: 'image', 
+    url: 'https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=1000&q=80',
+    icon: '🏙️' 
+  },
+  { 
+    id: 'library', 
+    label: 'Executive Library', 
+    type: 'image', 
+    url: 'https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=1000&q=80',
+    icon: '📚' 
+  },
+  { 
+    id: 'skyline', 
+    label: 'Skyline Penthouse', 
+    type: 'image', 
+    url: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1000&q=80',
+    icon: '🌆' 
+  },
+  { 
+    id: 'warm', 
+    label: 'Warm Workspace', 
+    type: 'image', 
+    url: 'https://images.unsplash.com/photo-1517502884422-41eaead166d4?auto=format&fit=crop&w=1000&q=80',
+    icon: '🌿' 
+  },
+  { 
+    id: 'studio', 
+    label: 'Dark Tech Studio', 
+    type: 'gradient', 
+    url: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%)',
+    icon: '💻' 
+  }
+];
+
+const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, guestUser = null }) => {
   const { meetingId: paramMeetingId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -33,8 +84,23 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [mediaError, setMediaError] = useState('');
 
+  // Virtual Background State
+  const [selectedBg, setSelectedBg] = useState(BACKGROUND_PRESETS[0]);
+  const [customBgUrl, setCustomBgUrl] = useState(null);
+  const bgFileInputRef = useRef(null);
+
+  // Meeting Recording State
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [recordingBlob, setRecordingBlob] = useState(null);
+  const [recordingUrl, setRecordingUrl] = useState(null);
+  const [showSavedRecordingModal, setShowSavedRecordingModal] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const recordedChunksRef = useRef([]);
+  const recordingTimerRef = useRef(null);
+
   // Drawers (Side Panel) State
-  const [activeDrawer, setActiveDrawer] = useState(null); // 'chat' | 'documents' | 'participants' | null
+  const [activeDrawer, setActiveDrawer] = useState(null); // 'chat' | 'documents' | 'participants' | 'backgrounds' | null
   const [unreadChatCount, setUnreadChatCount] = useState(0);
 
   // Chat State
@@ -47,9 +113,10 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave }) => {
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState('');
 
-  // Call duration timer
+  // Link copy states
   const [callDuration, setCallDuration] = useState(0);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedGuestLink, setCopiedGuestLink] = useState(false);
 
   // Media Stream Refs
   const localStreamRef = useRef(null);
@@ -59,12 +126,18 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave }) => {
   const chatBottomRef = useRef(null);
   const fileInputRef = useRef(null);
 
+  // Compute Self Name & Role
+  const selfName = isGuest && guestUser?.name
+    ? guestUser.name
+    : (user?.employee?.first_name ? `${user.employee.first_name} ${user.employee.last_name || ''}` : (user?.email?.split('@')[0] || 'You'));
+  const selfRole = isGuest ? 'Guest' : (user?.role === 'admin' ? 'Host (Admin)' : 'Participant');
+
   // Simulated Team Participants for Group Meetings
   const [participants, setParticipants] = useState([
     {
       id: 'self',
-      name: user?.employee?.first_name ? `${user.employee.first_name} ${user.employee.last_name || ''}` : (user?.email?.split('@')[0] || 'You'),
-      role: user?.role === 'admin' ? 'Host (Admin)' : 'Participant',
+      name: selfName,
+      role: selfRole,
       isLocal: true,
       isMicOn: true,
       isCameraOn: true,
@@ -337,14 +410,13 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave }) => {
     e?.preventDefault();
     if (!chatInput.trim()) return;
 
-    const myName = user?.employee?.first_name 
-      ? `${user.employee.first_name} ${user.employee.last_name || ''}` 
-      : (user?.email || 'You');
+    const myName = selfName;
+    const myRole = selfRole;
 
     const msgPayload = {
       message: chatInput.trim(),
       sender_name: myName,
-      sender_role: user?.role === 'admin' ? 'Host' : 'Member'
+      sender_role: myRole
     };
 
     setSendingMsg(true);
@@ -362,6 +434,7 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave }) => {
           id: Date.now(), 
           meeting_id: meetingId, 
           sender_name: myName, 
+          sender_role: myRole,
           message: chatInput.trim(),
           createdAt: new Date().toISOString()
         }
@@ -379,6 +452,7 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave }) => {
 
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('uploader_name', selfName);
 
     setUploadingDoc(true);
     setUploadSuccess('');
@@ -399,7 +473,7 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave }) => {
     }
   };
 
-  // Copy Meeting Invite Link
+  // Copy Meeting Member Invite Link
   const handleCopyInvite = () => {
     const inviteLink = `${window.location.origin}/meetings/${meetingId}`;
     navigator.clipboard.writeText(inviteLink).then(() => {
@@ -408,9 +482,128 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave }) => {
     });
   };
 
+  // Copy Public Guest Join Link
+  const handleCopyGuestLink = () => {
+    const guestUrl = `${window.location.origin}/meeting/guest/${meetingId}`;
+    navigator.clipboard.writeText(guestUrl).then(() => {
+      setCopiedGuestLink(true);
+      setTimeout(() => setCopiedGuestLink(false), 3000);
+    });
+  };
+
+  // Virtual Background Handlers
+  const handleSelectBackground = (preset) => {
+    setSelectedBg(preset);
+  };
+
+  const handleUploadCustomBg = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target.result;
+      setCustomBgUrl(dataUrl);
+      const customPreset = {
+        id: 'custom-' + Date.now(),
+        label: 'Custom Photo',
+        type: 'image',
+        url: dataUrl,
+        icon: '🖼️'
+      };
+      setSelectedBg(customPreset);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Meeting Recording Handlers
+  const handleStartRecording = async () => {
+    try {
+      recordedChunksRef.current = [];
+      let captureStream = null;
+
+      try {
+        captureStream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true
+        });
+      } catch (err) {
+        // Fallback: If user cancels screen share, record local camera stream
+        if (localStreamRef.current) {
+          captureStream = localStreamRef.current;
+        } else {
+          alert('No active screen or video stream available to record.');
+          return;
+        }
+      }
+
+      const types = [
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm',
+        'video/mp4'
+      ];
+      const selectedMime = types.find(t => MediaRecorder.isTypeSupported(t)) || '';
+
+      const recorder = new MediaRecorder(captureStream, selectedMime ? { mimeType: selectedMime } : {});
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(recordedChunksRef.current, { type: selectedMime || 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        setRecordingBlob(blob);
+        setRecordingUrl(url);
+        setShowSavedRecordingModal(true);
+
+        // Auto download trigger
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `PARAKSHTECH-Meeting-${meetingId}-${new Date().toISOString().slice(0, 10)}.webm`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        if (captureStream !== localStreamRef.current) {
+          captureStream.getTracks().forEach(t => t.stop());
+        }
+      };
+
+      recorder.start(1000);
+      setIsRecording(true);
+      setRecordingDuration(0);
+
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+
+    } catch (err) {
+      console.error('Error starting recording:', err);
+      alert('Failed to start recording: ' + err.message);
+    }
+  };
+
+  const handleStopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+  };
+
   // Leave Meeting
   const handleLeaveMeeting = () => {
     if (window.confirm('Are you sure you want to leave this meeting?')) {
+      if (isRecording) {
+        handleStopRecording();
+      }
       stopScreenShare();
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(track => track.stop());
@@ -475,6 +668,25 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave }) => {
         </div>
 
         <div className="d-flex align-items-center gap-2">
+          {/* Live Recording Indicator */}
+          {isRecording && (
+            <div className="recording-live-indicator me-1">
+              <span className="pulse-red-dot"></span>
+              <span>REC {formatTimer(recordingDuration)}</span>
+            </div>
+          )}
+
+          {/* Copy Public Guest Link */}
+          <Button 
+            variant="outline-info" 
+            size="sm" 
+            onClick={handleCopyGuestLink}
+            className="d-flex align-items-center gap-1 border-info"
+            title="Copy link for external guests / clients (no login needed)"
+          >
+            {copiedGuestLink ? <><FaCheck className="text-success" /> Guest Link Copied</> : <><FaUserPlus /> Guest Link</>}
+          </Button>
+
           {/* Copy Meeting Link */}
           <Button 
             variant="outline-light" 
@@ -570,8 +782,30 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave }) => {
               {participants.map(p => (
                 <div 
                   key={p.id} 
-                  className={`participant-tile ${p.isLocal ? 'is-local' : ''} ${p.isSpeaking ? 'active-speaker' : ''}`}
+                  className={`participant-tile ${p.isLocal ? 'is-local' : ''} ${p.isSpeaking ? 'active-speaker' : ''} ${p.isLocal && selectedBg.type !== 'none' ? 'has-virtual-bg' : ''}`}
                 >
+                  {/* Virtual Background Backdrop Layer */}
+                  {p.isLocal && selectedBg.type === 'blur' && (
+                    <div className="virtual-bg-tile-backdrop blur-mode" />
+                  )}
+                  {p.isLocal && selectedBg.type === 'image' && (
+                    <div 
+                      className="virtual-bg-tile-backdrop" 
+                      style={{ backgroundImage: `url(${selectedBg.url})` }}
+                    />
+                  )}
+                  {p.isLocal && selectedBg.type === 'gradient' && (
+                    <div 
+                      className="virtual-bg-tile-backdrop" 
+                      style={{ background: selectedBg.url }}
+                    />
+                  )}
+                  {p.isLocal && selectedBg.type !== 'none' && (
+                    <div className="active-bg-badge">
+                      <span>✨ {selectedBg.label}</span>
+                    </div>
+                  )}
+
                   {p.isLocal ? (
                     isCameraOn ? (
                       <video 
@@ -579,7 +813,8 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave }) => {
                         autoPlay 
                         playsInline 
                         muted 
-                        className="participant-video-element" 
+                        className={`participant-video-element ${selectedBg.type !== 'none' ? 'with-virtual-bg' : ''}`} 
+                        style={selectedBg.type === 'blur' ? { filter: `blur(${selectedBg.blurAmount || '12px'})` } : {}}
                       />
                     ) : (
                       <div className="participant-avatar-placeholder">
@@ -622,7 +857,7 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave }) => {
           )}
         </div>
 
-        {/* IN-MEETING SIDE DRAWER (Chat, Documents, Participants) */}
+        {/* IN-MEETING SIDE DRAWER (Chat, Documents, Participants, Backgrounds) */}
         {activeDrawer && (
           <div className="meeting-side-drawer">
             <div className="drawer-header">
@@ -630,6 +865,7 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave }) => {
                 {activeDrawer === 'chat' && <><FaComments className="text-primary" /> Group Chat</>}
                 {activeDrawer === 'documents' && <><FaPaperclip className="text-success" /> Shared Documents ({documents.length})</>}
                 {activeDrawer === 'participants' && <><FaUsers className="text-info" /> Participants ({participants.length})</>}
+                {activeDrawer === 'backgrounds' && <><FaPalette className="text-warning" /> Professional Backgrounds</>}
               </h6>
               <Button 
                 variant="link" 
@@ -653,7 +889,13 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave }) => {
                 className={`drawer-tab-btn ${activeDrawer === 'documents' ? 'active' : ''}`}
                 onClick={() => setActiveDrawer('documents')}
               >
-                <FaPaperclip size={14} /> Documents
+                <FaPaperclip size={14} /> Docs
+              </button>
+              <button 
+                className={`drawer-tab-btn ${activeDrawer === 'backgrounds' ? 'active' : ''}`}
+                onClick={() => setActiveDrawer('backgrounds')}
+              >
+                <FaPalette size={14} /> Backgrounds
               </button>
               <button 
                 className={`drawer-tab-btn ${activeDrawer === 'participants' ? 'active' : ''}`}
@@ -676,7 +918,7 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave }) => {
                       </div>
                     ) : (
                       messages.map((msg, idx) => {
-                        const isMine = msg.sender_id === user?.id || msg.sender_name === user?.employee?.first_name || msg.sender_name === 'You';
+                        const isMine = msg.sender_id === user?.id || msg.sender_name === selfName || msg.sender_name === 'You';
                         return (
                           <div key={msg.id || idx} className={`chat-bubble-row ${isMine ? 'mine' : 'theirs'}`}>
                             <div className="chat-sender-info">
@@ -771,7 +1013,7 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave }) => {
                             {doc.file_name}
                           </div>
                           <div className="text-muted" style={{ fontSize: '11px' }}>
-                            {formatFileSize(doc.file_size)} • by {doc.uploader_name || 'Host'}
+                            {formatFileSize(doc.file_size)} • by {doc.uploader_name || 'Participant'}
                           </div>
                         </div>
                       </div>
@@ -789,6 +1031,77 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave }) => {
                     </div>
                   ))
                 )}
+              </div>
+            )}
+
+            {/* Drawer Body - VIRTUAL BACKGROUNDS TAB */}
+            {activeDrawer === 'backgrounds' && (
+              <div className="drawer-content-body">
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <span className="text-muted small">Choose Professional Studio Setting</span>
+                  {selectedBg.type !== 'none' && (
+                    <Button 
+                      variant="outline-secondary" 
+                      size="sm" 
+                      onClick={() => setSelectedBg(BACKGROUND_PRESETS[0])}
+                      className="py-0 px-2"
+                      style={{ fontSize: '11px' }}
+                    >
+                      Reset None
+                    </Button>
+                  )}
+                </div>
+
+                {/* Custom Photo Upload */}
+                <input 
+                  type="file" 
+                  ref={bgFileInputRef} 
+                  accept="image/*" 
+                  onChange={handleUploadCustomBg} 
+                  style={{ display: 'none' }} 
+                />
+                <Button 
+                  variant="outline-primary" 
+                  size="sm" 
+                  className="w-100 mb-3 d-flex align-items-center justify-content-center gap-2"
+                  onClick={() => bgFileInputRef.current?.click()}
+                >
+                  <FaUpload size={13} />
+                  <span>Upload Custom Background Photo</span>
+                </Button>
+
+                {/* Presets Grid */}
+                <div className="virtual-bg-grid">
+                  {BACKGROUND_PRESETS.map((preset) => {
+                    const isActive = selectedBg.id === preset.id;
+                    return (
+                      <div 
+                        key={preset.id}
+                        className={`virtual-bg-card ${isActive ? 'active' : ''}`}
+                        onClick={() => handleSelectBackground(preset)}
+                        style={
+                          preset.type === 'image' 
+                            ? { backgroundImage: `url(${preset.url})` }
+                            : preset.type === 'gradient'
+                            ? { background: preset.url }
+                            : preset.type === 'blur'
+                            ? { background: '#1e293b' }
+                            : { background: '#0f172a' }
+                        }
+                      >
+                        <div className="bg-label">
+                          <span className="text-truncate">{preset.icon} {preset.label}</span>
+                          {isActive && <FaCheckCircle size={12} className="text-primary flex-shrink-0" />}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-3 p-2 rounded bg-dark border border-secondary text-muted small" style={{ fontSize: '11px' }}>
+                  <FaMagic className="text-warning me-1" />
+                  Your selected professional background is applied directly to your webcam stream for all attendees to see.
+                </div>
               </div>
             )}
 
@@ -832,13 +1145,18 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave }) => {
         {/* Left Side Info */}
         <div className="d-flex align-items-center gap-2 text-muted small d-none d-md-flex" style={{ fontSize: '13px' }}>
           <FaShieldAlt className="text-success" />
-          <span>Encrypted Group Call</span>
+          <span>Encrypted Call</span>
           <span>•</span>
           <span className="font-monospace text-light">{meetingId}</span>
+          {isRecording && (
+            <Badge bg="danger" className="ms-2 d-flex align-items-center gap-1 font-monospace">
+              <span className="pulse-red-dot"></span> REC {formatTimer(recordingDuration)}
+            </Badge>
+          )}
         </div>
 
         {/* Center Main Action Controls */}
-        <div className="d-flex align-items-center gap-3">
+        <div className="d-flex align-items-center gap-2 gap-sm-3">
           {/* Microphone Toggle */}
           <OverlayTrigger placement="top" overlay={<Tooltip>{isMicOn ? 'Mute Microphone' : 'Unmute Microphone'}</Tooltip>}>
             <button 
@@ -869,6 +1187,27 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave }) => {
             </button>
           </OverlayTrigger>
 
+          {/* Virtual Background Toggle */}
+          <OverlayTrigger placement="top" overlay={<Tooltip>Change Virtual Background</Tooltip>}>
+            <button 
+              className={`meeting-control-btn ${selectedBg.type !== 'none' || activeDrawer === 'backgrounds' ? 'active' : ''}`}
+              onClick={() => setActiveDrawer(activeDrawer === 'backgrounds' ? null : 'backgrounds')}
+            >
+              <FaPalette />
+            </button>
+          </OverlayTrigger>
+
+          {/* Meeting Recording Toggle */}
+          <OverlayTrigger placement="top" overlay={<Tooltip>{isRecording ? 'Stop Recording' : 'Record Meeting'}</Tooltip>}>
+            <button 
+              className={`meeting-control-btn ${isRecording ? 'recording-active' : ''}`}
+              onClick={isRecording ? handleStopRecording : handleStartRecording}
+              title={isRecording ? 'Stop Recording' : 'Record Meeting'}
+            >
+              {isRecording ? <FaStop /> : <FaCircle className="text-danger" />}
+            </button>
+          </OverlayTrigger>
+
           {/* End Call / Leave Button */}
           <OverlayTrigger placement="top" overlay={<Tooltip>Leave Meeting</Tooltip>}>
             <button 
@@ -876,13 +1215,23 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave }) => {
               onClick={handleLeaveMeeting}
             >
               <FaPhoneSlash />
-              <span className="d-none d-sm-inline">Leave Call</span>
+              <span className="d-none d-sm-inline">Leave</span>
             </button>
           </OverlayTrigger>
         </div>
 
         {/* Right Drawer Toggles */}
         <div className="d-flex align-items-center gap-2">
+          {/* Quick Copy Guest Link */}
+          <OverlayTrigger placement="top" overlay={<Tooltip>Copy Guest Link (No Login Needed)</Tooltip>}>
+            <button 
+              className={`meeting-control-btn ${copiedGuestLink ? 'active' : ''}`}
+              onClick={handleCopyGuestLink}
+            >
+              {copiedGuestLink ? <FaCheck className="text-success" /> : <FaUserPlus />}
+            </button>
+          </OverlayTrigger>
+
           {/* Chat Drawer Toggle */}
           <OverlayTrigger placement="top" overlay={<Tooltip>In-Meeting Chat</Tooltip>}>
             <button 
@@ -920,6 +1269,59 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave }) => {
           </OverlayTrigger>
         </div>
       </div>
+
+      {/* SAVED RECORDING MODAL */}
+      <Modal 
+        show={showSavedRecordingModal} 
+        onHide={() => setShowSavedRecordingModal(false)}
+        centered
+        size="lg"
+      >
+        <Modal.Header closeButton className="bg-dark text-white border-secondary">
+          <Modal.Title className="h5 fw-bold d-flex align-items-center gap-2">
+            <FaCheckCircle className="text-success" /> Meeting Recording Saved
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="bg-dark text-white">
+          <p className="text-light small">
+            Your recorded meeting has been successfully captured and saved to your device! You can preview it below or download it again.
+          </p>
+
+          {recordingUrl && (
+            <div className="mb-3 rounded overflow-hidden border border-secondary" style={{ maxHeight: '380px', background: '#000' }}>
+              <video 
+                src={recordingUrl} 
+                controls 
+                style={{ width: '100%', maxHeight: '380px', objectFit: 'contain' }}
+              />
+            </div>
+          )}
+
+          <div className="p-3 rounded bg-secondary bg-opacity-25 d-flex justify-content-between align-items-center small">
+            <div>
+              <div className="fw-semibold text-white">File: PARAKSHTECH-Meeting-{meetingId}.webm</div>
+              <div className="text-muted">Recorded Duration: {formatTimer(recordingDuration)}</div>
+            </div>
+            {recordingBlob && (
+              <Badge bg="info">{(recordingBlob.size / (1024 * 1024)).toFixed(2)} MB</Badge>
+            )}
+          </div>
+        </Modal.Body>
+        <Modal.Footer className="bg-dark border-secondary">
+          <Button variant="secondary" onClick={() => setShowSavedRecordingModal(false)}>
+            Close
+          </Button>
+          {recordingUrl && (
+            <a 
+              href={recordingUrl} 
+              download={`PARAKSHTECH-Meeting-${meetingId}-${new Date().toISOString().slice(0, 10)}.webm`}
+              className="btn btn-primary d-flex align-items-center gap-2"
+            >
+              <FaDownload size={14} /> Download Recording Again
+            </a>
+          )}
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 };

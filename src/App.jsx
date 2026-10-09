@@ -33,6 +33,7 @@ import Profile from './components/profile/Profile';
 import Performance from './components/performance/Performance';
 import PerformanceReview from './components/performance/PerformanceReview';
 import MeetingPanel from './components/meetings/MeetingPanel';
+import GuestMeetingJoin from './components/meetings/GuestMeetingJoin';
 
 function App() {
   return (
@@ -41,6 +42,9 @@ function App() {
         <ToastContainer />
         <Routes>
           <Route path="/login" element={<Login />} />
+          {/* Public Guest Meeting Routes (No employee login required) */}
+          <Route path="/meeting/guest/:meetingId" element={<GuestMeetingJoin />} />
+          <Route path="/meetings/guest/:meetingId" element={<GuestMeetingJoin />} />
           <Route path="/" element={<ProtectedRoute />}>
             <Route element={<MainLayout />}>
               <Route index element={<Navigate to="/dashboard" replace />} />
