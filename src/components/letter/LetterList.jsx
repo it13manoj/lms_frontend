@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Row, Col, Card, Table, Button, Badge, Modal, Form, 
-  Spinner, Alert, InputGroup 
+  Spinner, Alert, InputGroup, ButtonGroup 
 } from 'react-bootstrap';
 import { 
   FaFileAlt, FaPlus, FaPrint, FaSearch, FaFilter, 
   FaTrash, FaEdit, FaEye, FaUserTie, FaCheckCircle, 
-  FaBuilding, FaAward, FaCalendarAlt, FaMoneyBillWave 
+  FaBuilding, FaAward, FaCalendarAlt, FaMoneyBillWave,
+  FaColumns, FaDesktop 
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import letterService from '../../services/letterService';
@@ -52,10 +53,13 @@ export default function LetterList({ defaultType = 'all' }) {
   const [editingLetterId, setEditingLetterId] = useState(null);
   const [formData, setFormData] = useState(INITIAL_FORM_STATE);
   const [submitting, setSubmitting] = useState(false);
+  const [generateViewMode, setGenerateViewMode] = useState('split'); // 'split' | 'form' | 'preview'
+  const [generateZoom, setGenerateZoom] = useState(0.78);
 
   // Preview Modal State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewLetter, setPreviewLetter] = useState(null);
+  const [previewModalZoom, setPreviewModalZoom] = useState(1.0);
 
   // Load Letters
   const loadLetters = async () => {
@@ -482,15 +486,69 @@ export default function LetterList({ defaultType = 'all' }) {
         </Card.Body>
       </Card>
 
-      {/* CREATE / EDIT DYNAMIC MODAL */}
-      <Modal show={showFormModal} onHide={() => setShowFormModal(false)} size="lg" backdrop="static">
-        <Form onSubmit={handleFormSubmit}>
-          <Modal.Header closeButton>
-            <Modal.Title className="fs-5 fw-bold">
-              {editingLetterId ? 'Edit Letter Details' : 'Generate Official Dynamic Letter'}
-            </Modal.Title>
+      {/* CREATE / EDIT DYNAMIC MODAL WITH LIVE CONTENT SCREEN */}
+      <Modal 
+        show={showFormModal} 
+        onHide={() => setShowFormModal(false)} 
+        dialogClassName="letter-generate-modal"
+        backdrop="static"
+      >
+        <Form onSubmit={handleFormSubmit} className="d-flex flex-column h-100">
+          <Modal.Header closeButton className="py-2 px-3">
+            <div className="d-flex flex-wrap align-items-center justify-content-between w-100 gap-2 me-3">
+              <div>
+                <Modal.Title className="fs-5 fw-bold d-flex align-items-center gap-2 mb-0">
+                  <FaFileAlt className="text-primary" />
+                  <span>{editingLetterId ? 'Edit Letter Details' : 'Generate Official Dynamic Letter'}</span>
+                </Modal.Title>
+                <div className="text-muted small" style={{ fontSize: '12px' }}>
+                  Real-time live content screen displays your letter dynamically as you fill out the details.
+                </div>
+              </div>
+
+              {/* View Switcher: Split vs Form vs Full Content Screen */}
+              <div className="d-flex align-items-center gap-2">
+                <span className="small fw-semibold text-secondary d-none d-md-inline">Screen View:</span>
+                <ButtonGroup size="sm">
+                  <Button 
+                    variant={generateViewMode === 'split' ? 'primary' : 'outline-secondary'}
+                    onClick={() => setGenerateViewMode('split')}
+                    title="Form and Live Letter Content side by side"
+                    className="d-flex align-items-center gap-1"
+                  >
+                    <FaColumns size={12} />
+                    <span>Split Screen</span>
+                  </Button>
+                  <Button 
+                    variant={generateViewMode === 'form' ? 'primary' : 'outline-secondary'}
+                    onClick={() => setGenerateViewMode('form')}
+                    title="Form Only"
+                    className="d-flex align-items-center gap-1"
+                  >
+                    <FaEdit size={12} />
+                    <span>Form Only</span>
+                  </Button>
+                  <Button 
+                    variant={generateViewMode === 'preview' ? 'primary' : 'outline-secondary'}
+                    onClick={() => setGenerateViewMode('preview')}
+                    title="Content Screen Only"
+                    className="d-flex align-items-center gap-1"
+                  >
+                    <FaDesktop size={12} />
+                    <span>Content Screen</span>
+                  </Button>
+                </ButtonGroup>
+              </div>
+            </div>
           </Modal.Header>
-          <Modal.Body className="p-4">
+          <Modal.Body className="p-0">
+            <Row className="g-0 m-0">
+              {(generateViewMode === 'split' || generateViewMode === 'form') && (
+                <Col 
+                  xs={12} 
+                  lg={generateViewMode === 'split' ? 5 : 12}
+                  className="letter-form-column"
+                >
             {/* Letter Type Selection */}
             <div className="mb-3 p-3 bg-light rounded border">
               <Form.Label className="fw-semibold small text-uppercase text-secondary mb-2">
@@ -714,21 +772,93 @@ export default function LetterList({ defaultType = 'all' }) {
                 </Form.Group>
               </Col>
             </Row>
-          </Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" onClick={() => setShowFormModal(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" type="submit" disabled={submitting}>
-              {submitting ? (
-                <>
-                  <Spinner size="sm" animation="border" className="me-2" />
-                  Generating...
-                </>
-              ) : (
-                editingLetterId ? 'Save Changes' : 'Generate & Issue Letter'
+                </Col>
               )}
-            </Button>
+
+              {/* RIGHT COLUMN: LIVE CONTENT SCREEN */}
+              {(generateViewMode === 'split' || generateViewMode === 'preview') && (
+                <Col 
+                  xs={12} 
+                  lg={generateViewMode === 'split' ? 7 : 12}
+                  className="letter-preview-column"
+                >
+                  <div className="letter-preview-toolbar">
+                    <div className="d-flex align-items-center gap-2">
+                      <Badge bg="success" className="d-flex align-items-center gap-1 py-1 px-2">
+                        <span className="spinner-grow spinner-grow-sm" role="status" style={{ width: '7px', height: '7px' }}></span>
+                        <span>LIVE CONTENT SCREEN</span>
+                      </Badge>
+                      <span className="text-muted small d-none d-sm-inline">
+                        Real-time A4 Letter Preview
+                      </span>
+                    </div>
+
+                    {/* Zoom / Scaling Controls */}
+                    <div className="d-flex align-items-center gap-1">
+                      <span className="text-secondary small me-1">Scale:</span>
+                      {[0.65, 0.78, 0.9, 1.0].map(z => (
+                        <Button 
+                          key={z}
+                          variant={generateZoom === z ? 'dark' : 'outline-secondary'}
+                          size="sm"
+                          className="py-0 px-2"
+                          style={{ fontSize: '11px', lineHeight: '18px' }}
+                          onClick={() => setGenerateZoom(z)}
+                        >
+                          {Math.round(z * 100)}%
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="letter-preview-scroll-area">
+                    <div 
+                      className="letter-zoom-viewport"
+                      style={{ 
+                        transform: `scale(${generateZoom})`,
+                        marginBottom: generateZoom < 1 ? `-${Math.round((1 - generateZoom) * 1150)}px` : '0px'
+                      }}
+                    >
+                      {renderLetterTemplate({
+                        ...formData,
+                        reference_no: formData.reference_no || (
+                          formData.letter_type === 'joining' 
+                            ? `PT/JL/${new Date().getFullYear()}/DRAFT` 
+                            : formData.letter_type === 'experience'
+                            ? `PT/EXP/${new Date().getFullYear()}/DRAFT`
+                            : `PT/OL/${new Date().getFullYear()}/DRAFT`
+                        )
+                      })}
+                    </div>
+                  </div>
+                </Col>
+              )}
+            </Row>
+          </Modal.Body>
+
+          <Modal.Footer className="bg-white border-top py-2 px-4">
+            <div className="d-flex justify-content-between align-items-center w-100 flex-wrap gap-2">
+              <div className="text-muted small">
+                {formData.letter_type === 'offer' && 'Standard ParakshTech Offer Letter'}
+                {formData.letter_type === 'joining' && 'Official Appointment & Joining Letter'}
+                {formData.letter_type === 'experience' && 'Work Experience & Relieving Certificate'}
+              </div>
+              <div className="d-flex gap-2">
+                <Button variant="secondary" onClick={() => setShowFormModal(false)}>
+                  Cancel
+                </Button>
+                <Button variant="primary" type="submit" disabled={submitting}>
+                  {submitting ? (
+                    <>
+                      <Spinner size="sm" animation="border" className="me-2" />
+                      Generating...
+                    </>
+                  ) : (
+                    editingLetterId ? 'Save Changes' : 'Generate & Issue Letter'
+                  )}
+                </Button>
+              </div>
+            </div>
           </Modal.Footer>
         </Form>
       </Modal>
@@ -741,23 +871,46 @@ export default function LetterList({ defaultType = 'all' }) {
         fullscreen="lg-down"
         backdrop="static"
       >
-        <Modal.Header closeButton className="no-print bg-white border-bottom">
-          <Modal.Title className="fs-6 fw-bold d-flex align-items-center gap-2">
+        <Modal.Header closeButton className="no-print bg-white border-bottom py-2 px-3">
+          <Modal.Title className="fs-6 fw-bold d-flex align-items-center gap-2 mb-0">
             <span>{previewLetter?.reference_no}</span>
             <Badge bg="secondary" className="fw-normal">
               {previewLetter?.letter_type?.toUpperCase()}
             </Badge>
           </Modal.Title>
-          <div className="ms-auto me-3 d-flex gap-2">
+          <div className="ms-auto me-3 d-flex align-items-center gap-2">
+            <div className="d-flex align-items-center gap-1 me-2">
+              <span className="text-secondary small me-1">Scale:</span>
+              {[0.75, 0.85, 1.0, 1.1].map(z => (
+                <Button 
+                  key={z}
+                  variant={previewModalZoom === z ? 'dark' : 'outline-secondary'}
+                  size="sm"
+                  className="py-0 px-2"
+                  style={{ fontSize: '11px', lineHeight: '18px' }}
+                  onClick={() => setPreviewModalZoom(z)}
+                >
+                  {Math.round(z * 100)}%
+                </Button>
+              ))}
+            </div>
             <Button variant="success" size="sm" onClick={handlePrintLetter} className="d-flex align-items-center gap-1 shadow-sm">
               <FaPrint size={13} />
               <span>Print / Save PDF</span>
             </Button>
           </div>
         </Modal.Header>
-        <Modal.Body className="p-0 bg-secondary bg-opacity-10 d-flex justify-content-center">
-          <div className="letter-preview-print-area py-3">
-            {renderLetterTemplate(previewLetter)}
+        <Modal.Body className="p-0 bg-secondary bg-opacity-10 d-flex flex-column align-items-center">
+          <div 
+            className="letter-zoom-viewport py-3"
+            style={{
+              transform: `scale(${previewModalZoom})`,
+              marginBottom: previewModalZoom < 1 ? `-${Math.round((1 - previewModalZoom) * 1150)}px` : '0px'
+            }}
+          >
+            <div className="letter-preview-print-area">
+              {renderLetterTemplate(previewLetter)}
+            </div>
           </div>
         </Modal.Body>
       </Modal>
