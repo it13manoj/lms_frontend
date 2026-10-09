@@ -8,7 +8,8 @@ import {
   FaVideo, FaCalendarPlus, FaSignInAlt, FaDesktop, 
   FaComments, FaPaperclip, FaUsers, FaClock, 
   FaCopy, FaCheck, FaTrash, FaPlay, FaCalendarAlt, 
-  FaSearch, FaFilter, FaBuilding, FaLock, FaGlobe, FaUserPlus
+  FaSearch, FaFilter, FaBuilding, FaLock, FaGlobe, FaUserPlus,
+  FaEnvelope, FaShareAlt
 } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
@@ -70,8 +71,16 @@ const MeetingPanel = () => {
   // Fetch Registered Employees
   const fetchEmployeesList = async () => {
     try {
-      const res = await api.get('/employees', { params: { limit: 100 } });
-      if (res.data && res.data.data) {
+      // First try /employees/dropdown which is accessible to all authenticated users (employees, HR, Admin)
+      let res;
+      try {
+        res = await api.get('/employees/dropdown');
+      } catch (e) {
+        // Fallback to /employees if dropdown route is unavailable
+        res = await api.get('/employees', { params: { limit: 100 } });
+      }
+
+      if (res && res.data && res.data.data) {
         setAllEmployees(res.data.data);
       }
     } catch (err) {
@@ -264,6 +273,37 @@ const MeetingPanel = () => {
       setCopiedGuestId(mId);
       setTimeout(() => setCopiedGuestId(null), 2500);
     });
+  };
+
+  // Helper to open default mail client with meeting join invite
+  const handleSendMeetingEmail = (meeting) => {
+    const meetingUrl = `${window.location.origin}/meetings/${meeting.meeting_id}`;
+    const guestUrl = `${window.location.origin}/meeting/guest/${meeting.meeting_id}`;
+    
+    let toEmails = '';
+    if (meeting.invited_employees) {
+      try {
+        const emps = typeof meeting.invited_employees === 'string' ? JSON.parse(meeting.invited_employees) : meeting.invited_employees;
+        if (Array.isArray(emps)) {
+          toEmails = emps.map(e => e.email).filter(Boolean).join(',');
+        }
+      } catch (e) {}
+    }
+
+    const subject = encodeURIComponent(`Invitation: ${meeting.title} - Video Conference`);
+    const body = encodeURIComponent(
+      `Hello,\n\n` +
+      `You are invited to join the meeting: "${meeting.title}"\n\n` +
+      `Date: ${meeting.scheduled_date}\n` +
+      `Time: ${meeting.start_time?.slice(0, 5)} (${meeting.duration_minutes} minutes)\n` +
+      `Host: ${meeting.host_name}\n\n` +
+      `Employee Join Link (requires login):\n${meetingUrl}\n\n` +
+      `External Guest Link (no login required):\n${guestUrl}\n\n` +
+      `Meeting Passcode (if prompted): ${meeting.passcode || 'None'}\n\n` +
+      `Best regards,\nPARAKSHTECH LLP Team`
+    );
+
+    window.open(`mailto:${toEmails}?subject=${subject}&body=${body}`, '_blank');
   };
 
   // Cancel Meeting
@@ -559,14 +599,47 @@ const MeetingPanel = () => {
                           </span>
                         </div>
 
-                        <div className="text-muted small mb-3">
+                        <div className="text-muted small mb-2">
                           Host: <strong className="text-dark">{m.host_name}</strong>
                         </div>
+
+                        {/* Invited Employees Badges */}
+                        {(() => {
+                          let invites = [];
+                          if (m.invited_employees) {
+                            try {
+                              invites = typeof m.invited_employees === 'string' ? JSON.parse(m.invited_employees) : m.invited_employees;
+                            } catch (e) {}
+                          }
+                          if (Array.isArray(invites) && invites.length > 0) {
+                            return (
+                              <div className="mb-2">
+                                <div className="text-muted small mb-1" style={{ fontSize: '11px' }}>
+                                  <FaUsers className="me-1 text-primary" />
+                                  <span>Invited Attendees ({invites.length}):</span>
+                                </div>
+                                <div className="d-flex flex-wrap gap-1">
+                                  {invites.slice(0, 3).map((emp, i) => (
+                                    <Badge key={emp.id || i} bg="light" className="text-dark border font-monospace" style={{ fontSize: '10px' }}>
+                                      {emp.name || emp.email}
+                                    </Badge>
+                                  ))}
+                                  {invites.length > 3 && (
+                                    <Badge bg="secondary" style={{ fontSize: '10px' }}>
+                                      +{invites.length - 3} more
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
 
                       {/* Card Footer Actions */}
                       <div className="d-flex justify-content-between align-items-center pt-3 border-top mt-2">
-                        <div className="d-flex align-items-center gap-2">
+                        <div className="d-flex flex-wrap align-items-center gap-2">
                           {/* Join Meeting Action */}
                           <Button 
                             variant="primary" 
@@ -600,6 +673,18 @@ const MeetingPanel = () => {
                           >
                             {copiedGuestId === m.meeting_id ? <FaCheck className="text-success" /> : <FaUserPlus />}
                             <span>{copiedGuestId === m.meeting_id ? 'Copied' : 'Guest Link'}</span>
+                          </Button>
+
+                          {/* Email Invite Action */}
+                          <Button 
+                            variant="outline-success" 
+                            size="sm"
+                            onClick={() => handleSendMeetingEmail(m)}
+                            title="Send meeting invite via email"
+                            className="d-flex align-items-center gap-1 border-success"
+                          >
+                            <FaEnvelope />
+                            <span>Email Invite</span>
                           </Button>
                         </div>
 
