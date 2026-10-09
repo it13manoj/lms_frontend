@@ -6,7 +6,7 @@ import {
   FaSignOutAlt, FaUser, FaBook, FaChartBar,
   FaUserCircle, FaCog, FaClipboardList, FaBuilding,
   FaUserTie, FaChevronDown, FaChevronRight,
-  FaHandHoldingUsd, FaRegCalendarCheck
+  FaHandHoldingUsd, FaRegCalendarCheck, FaVideo
 } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import companyLogo from '../../assets/parakshtech_logo.jpg';
@@ -64,6 +64,12 @@ const handleLogout = (e) => {
         path: '/profile', 
         icon: <FaUserCircle />, 
         label: 'My Profile',
+        allowedRoles: ['admin', 'hr', 'manager', 'sales', 'team', 'employee']
+      },
+      { 
+        path: '/meetings', 
+        icon: <FaVideo />, 
+        label: 'Meetings',
         allowedRoles: ['admin', 'hr', 'manager', 'sales', 'team', 'employee']
       }
     ];

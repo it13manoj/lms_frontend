@@ -1,0 +1,501 @@
+/* Meeting Hub & Video Conference Styles */
+
+/* Header & Stat Cards */
+.meeting-hub-container {
+  background-color: #f8fafc;
+  min-height: calc(100vh - 70px);
+}
+
+.meeting-stat-card {
+  border-radius: 12px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.meeting-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08) !important;
+}
+
+.meeting-card {
+  border-radius: 12px;
+  transition: all 0.2s ease;
+  border: 1px solid #e2e8f0;
+}
+
+.meeting-card:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.08);
+}
+
+.meeting-card.in-progress {
+  border-left: 4px solid #10b981;
+}
+
+.meeting-card.scheduled {
+  border-left: 4px solid #3b82f6;
+}
+
+.meeting-card.completed {
+  border-left: 4px solid #6b7280;
+  opacity: 0.85;
+}
+
+/* LIVE MEETING ROOM INTERFACE (Dark Modern Theme) */
+.meeting-room-container {
+  background: #0f172a;
+  color: #f8fafc;
+  min-height: calc(100vh - 70px);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.meeting-room-header {
+  background: rgba(15, 23, 42, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(8px);
+  padding: 12px 20px;
+  z-index: 20;
+}
+
+.meeting-room-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Video Stage Area */
+.video-stage-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  overflow-y: auto;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+/* Participants Grid Layout */
+.participants-grid {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+}
+
+.participants-grid.grid-1 {
+  grid-template-columns: 1fr;
+  max-width: 900px;
+  margin: auto;
+}
+
+.participants-grid.grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+}
+
+.participants-grid.grid-3,
+.participants-grid.grid-4 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.participants-grid.grid-many {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+/* Participant Video Tile */
+.participant-tile {
+  background: #1e293b;
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid transparent;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  transition: border-color 0.2s ease;
+}
+
+.participant-tile.active-speaker {
+  border-color: #10b981;
+}
+
+.participant-tile.is-local {
+  border-color: #3b82f6;
+}
+
+.participant-video-element {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 10px;
+}
+
+.participant-avatar-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.participant-avatar-circle {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.tile-overlay-info {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(4px);
+  padding: 4px 10px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #fff;
+  z-index: 5;
+}
+
+.tile-status-icons {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 6px;
+  z-index: 5;
+}
+
+.status-icon-pill {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  backdrop-filter: blur(4px);
+}
+
+.status-icon-pill.muted {
+  background: rgba(239, 68, 68, 0.85);
+  color: white;
+}
+
+/* SCREEN SHARING SPOTLIGHT DISPLAY */
+.screen-share-spotlight {
+  width: 100%;
+  height: calc(100% - 130px);
+  background: #090d16;
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+  border: 2px solid #3b82f6;
+  box-shadow: 0 8px 32px rgba(59, 130, 246, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.screen-share-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.screen-share-banner {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid rgba(59, 130, 246, 0.5);
+  color: #60a5fa;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 10;
+  backdrop-filter: blur(6px);
+}
+
+.filmstrip-row {
+  height: 120px;
+  width: 100%;
+  margin-top: 12px;
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.filmstrip-row .participant-tile {
+  min-width: 180px;
+  height: 100%;
+  aspect-ratio: auto;
+}
+
+/* MEETING CONTROLS BAR */
+.meeting-controls-bar {
+  background: rgba(15, 23, 42, 0.95);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 20;
+  backdrop-filter: blur(8px);
+}
+
+.meeting-control-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  font-size: 18px;
+  transition: all 0.2s ease;
+  color: #f8fafc;
+  background: #334155;
+  position: relative;
+}
+
+.meeting-control-btn:hover {
+  background: #475569;
+  transform: scale(1.05);
+}
+
+.meeting-control-btn.active {
+  background: #3b82f6;
+  color: white;
+}
+
+.meeting-control-btn.danger {
+  background: #dc2626;
+  color: white;
+}
+
+.meeting-control-btn.danger:hover {
+  background: #b91c1c;
+}
+
+.meeting-control-btn.leave-btn {
+  width: auto;
+  border-radius: 24px;
+  padding: 0 20px;
+  height: 46px;
+  font-size: 14px;
+  font-weight: 600;
+  gap: 8px;
+}
+
+.badge-unread-indicator {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  background: #ef4444;
+  color: white;
+  border-radius: 10px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* IN-MEETING DRAWER (Chat & Documents) */
+.meeting-side-drawer {
+  width: 360px;
+  background: #1e293b;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  transition: width 0.3s ease;
+  z-index: 15;
+}
+
+.drawer-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.drawer-nav-tabs {
+  display: flex;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.drawer-tab-btn {
+  flex: 1;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.drawer-tab-btn.active {
+  color: #60a5fa;
+  border-bottom-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.drawer-content-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+}
+
+/* Chat Messages */
+.chat-messages-stream {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-bubble-row {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-bubble-row.mine {
+  align-items: flex-end;
+}
+
+.chat-bubble-row.theirs {
+  align-items: flex-start;
+}
+
+.chat-bubble-box {
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.chat-bubble-row.mine .chat-bubble-box {
+  background: #2563eb;
+  color: white;
+  border-bottom-right-radius: 2px;
+}
+
+.chat-bubble-row.theirs .chat-bubble-box {
+  background: #334155;
+  color: #f1f5f9;
+  border-bottom-left-radius: 2px;
+}
+
+.chat-sender-info {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-bottom: 3px;
+}
+
+.chat-input-area {
+  padding: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: #0f172a;
+}
+
+/* Document Sharing Tab */
+.document-upload-dropzone {
+  border: 2px dashed #475569;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  cursor: pointer;
+  background: rgba(30, 41, 59, 0.5);
+  transition: all 0.2s ease;
+}
+
+.document-upload-dropzone:hover {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.document-item-card {
+  background: #334155;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  transition: transform 0.15s ease;
+}
+
+.document-item-card:hover {
+  transform: translateY(-1px);
+  background: #3b4b61;
+}
+
+.doc-icon-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  background: #1e293b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #60a5fa;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .meeting-side-drawer {
+    position: absolute;
+    top: 60px;
+    right: 0;
+    bottom: 74px;
+    width: 100%;
+  }
+
+  .meeting-controls-bar {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .meeting-control-btn {
+    width: 42px;
+    height: 42px;
+    font-size: 16px;
+  }
+}
+

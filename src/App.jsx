@@ -32,6 +32,7 @@ import { AuthProvider } from './context/AuthContext';
 import Profile from './components/profile/Profile';
 import Performance from './components/performance/Performance';
 import PerformanceReview from './components/performance/PerformanceReview';
+import MeetingPanel from './components/meetings/MeetingPanel';
 
 function App() {
   return (
@@ -72,6 +73,10 @@ function App() {
               <Route path="performance" element={<Performance />} />
               <Route path="performance/review/:id?" element={<PerformanceReview />} />
               
+              {/* Meeting Routes */}
+              <Route path="meetings" element={<MeetingPanel />} />
+              <Route path="meetings/:meetingId" element={<MeetingPanel />} />
+
               {/* Other Routes */}
               <Route path="holidays" element={<HolidayCalendar />} />
               <Route path="payments" element={<PaymentHistory />} />
