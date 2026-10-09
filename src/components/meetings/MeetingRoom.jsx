@@ -16,6 +16,7 @@ import {
 import { io } from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
+import virtualBgProcessor from '../../utils/virtualBackground';
 import './MeetingPanel.css';
 
 // Component to render remote peer's WebRTC video and audio streams
@@ -185,7 +186,9 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
   // Virtual Background State
   const [selectedBg, setSelectedBg] = useState(BACKGROUND_PRESETS[0]);
   const [customBgUrl, setCustomBgUrl] = useState(null);
+  const [isBgProcessing, setIsBgProcessing] = useState(false);
   const bgFileInputRef = useRef(null);
+  const processedStreamRef = useRef(null);
 
   // Meeting Recording State
   const [isRecording, setIsRecording] = useState(false);
@@ -358,7 +361,9 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
       };
 
       // Add existing local tracks to this peer connection
-      const activeStream = isScreenSharing && screenStreamRef.current ? screenStreamRef.current : localStreamRef.current;
+      const activeStream = isScreenSharing && screenStreamRef.current 
+        ? screenStreamRef.current 
+        : (processedStreamRef.current || localStreamRef.current);
       if (activeStream && activeStream.getTracks().length > 0) {
         activeStream.getTracks().forEach(track => {
           try {
@@ -610,6 +615,7 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
 
     return () => {
       isMounted = false;
+      virtualBgProcessor.destroy();
       socket.emit('leave-meeting');
       socket.disconnect();
       Object.values(peersRef.current).forEach(pc => pc.close());
@@ -695,7 +701,7 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
   };
 
   // Toggle Camera
-  const toggleCamera = () => {
+  const toggleCamera = async () => {
     const nextState = !isCameraOn;
     if (localStreamRef.current) {
       const videoTracks = localStreamRef.current.getVideoTracks();
@@ -705,6 +711,29 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
         });
       }
     }
+    if (processedStreamRef.current) {
+      const pTracks = processedStreamRef.current.getVideoTracks();
+      pTracks.forEach(track => {
+        track.enabled = nextState;
+      });
+    }
+
+    if (!nextState) {
+      virtualBgProcessor.stop();
+    } else if (selectedBg.type !== 'none' && localStreamRef.current) {
+      try {
+        const processed = await virtualBgProcessor.start(localStreamRef.current, selectedBg);
+        if (processed) {
+          processedStreamRef.current = processed;
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = processed;
+          }
+        }
+      } catch (err) {
+        console.warn('Resume virtual background error:', err);
+      }
+    }
+
     setIsCameraOn(nextState);
     setParticipants(prev => prev.map(p => p.isLocal ? { ...p, isCameraOn: nextState } : p));
     socketRef.current?.emit('media-toggle', {
@@ -791,8 +820,12 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
     }
     setIsScreenSharing(false);
 
-    // Revert video track in all active RTCPeerConnections back to local camera track
-    const camTrack = localStreamRef.current?.getVideoTracks()[0] || null;
+    // Revert video track in all active RTCPeerConnections back to local camera track (or virtual bg track)
+    const activeLocalStream = processedStreamRef.current || localStreamRef.current;
+    const camTrack = activeLocalStream?.getVideoTracks()[0] || null;
+    if (localVideoRef.current && activeLocalStream) {
+      localVideoRef.current.srcObject = activeLocalStream;
+    }
     Object.values(peersRef.current).forEach(pc => {
       try {
         const videoSender = pc.getSenders()?.find(s => s.track && s.track.kind === 'video') || pc.getSenders()?.find(s => s.track === null);
@@ -967,8 +1000,52 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
   };
 
   // Virtual Background Handlers
-  const handleSelectBackground = (preset) => {
+  const handleSelectBackground = async (preset) => {
     setSelectedBg(preset);
+
+    if (preset.type === 'none') {
+      virtualBgProcessor.stop();
+      processedStreamRef.current = null;
+      if (localVideoRef.current && localStreamRef.current) {
+        localVideoRef.current.srcObject = localStreamRef.current;
+      }
+      const rawTrack = localStreamRef.current?.getVideoTracks()[0] || null;
+      if (!isScreenSharing && rawTrack) {
+        Object.values(peersRef.current).forEach(pc => {
+          const videoSender = pc.getSenders()?.find(s => s.track && s.track.kind === 'video') || pc.getSenders()?.find(s => s.track === null);
+          if (videoSender) {
+            videoSender.replaceTrack(rawTrack).catch(e => console.warn('replaceTrack revert note:', e));
+          }
+        });
+      }
+      return;
+    }
+
+    if (!localStreamRef.current || !isCameraOn) return;
+
+    try {
+      setIsBgProcessing(true);
+      const processed = await virtualBgProcessor.start(localStreamRef.current, preset);
+      if (processed) {
+        processedStreamRef.current = processed;
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = processed;
+        }
+        const bgTrack = processed.getVideoTracks()[0];
+        if (!isScreenSharing && bgTrack) {
+          Object.values(peersRef.current).forEach(pc => {
+            const videoSender = pc.getSenders()?.find(s => s.track && s.track.kind === 'video') || pc.getSenders()?.find(s => s.track === null);
+            if (videoSender) {
+              videoSender.replaceTrack(bgTrack).catch(e => console.warn('replaceTrack bg note:', e));
+            }
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('[MeetingRoom] Virtual background start error:', err);
+    } finally {
+      setIsBgProcessing(false);
+    }
   };
 
   const handleUploadCustomBg = (e) => {
@@ -985,7 +1062,7 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
         url: dataUrl,
         icon: '🖼️'
       };
-      setSelectedBg(customPreset);
+      handleSelectBackground(customPreset);
     };
     reader.readAsDataURL(file);
   };
@@ -1278,25 +1355,12 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
                   key={p.id} 
                   className={`participant-tile ${p.isLocal ? 'is-local' : ''} ${p.isSpeaking ? 'active-speaker' : ''} ${p.isLocal && selectedBg.type !== 'none' ? 'has-virtual-bg' : ''}`}
                 >
-                  {/* Virtual Background Backdrop Layer */}
-                  {p.isLocal && selectedBg.type === 'blur' && (
-                    <div className="virtual-bg-tile-backdrop blur-mode" />
-                  )}
-                  {p.isLocal && selectedBg.type === 'image' && (
-                    <div 
-                      className="virtual-bg-tile-backdrop" 
-                      style={{ backgroundImage: `url(${selectedBg.url})` }}
-                    />
-                  )}
-                  {p.isLocal && selectedBg.type === 'gradient' && (
-                    <div 
-                      className="virtual-bg-tile-backdrop" 
-                      style={{ background: selectedBg.url }}
-                    />
-                  )}
                   {p.isLocal && selectedBg.type !== 'none' && (
-                    <div className="active-bg-badge">
+                    <div className="active-bg-badge d-flex align-items-center gap-1">
                       <span>✨ {selectedBg.label}</span>
+                      {isBgProcessing && (
+                        <span className="spinner-border spinner-border-sm text-info ms-1" role="status" style={{ width: '10px', height: '10px' }} />
+                      )}
                     </div>
                   )}
 
@@ -1307,8 +1371,7 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
                         autoPlay 
                         playsInline 
                         muted 
-                        className={`participant-video-element ${selectedBg.type !== 'none' ? 'with-virtual-bg' : ''}`} 
-                        style={selectedBg.type === 'blur' ? { filter: `blur(${selectedBg.blurAmount || '12px'})` } : {}}
+                        className="participant-video-element" 
                       />
                     ) : (
                       <div className="participant-avatar-placeholder">
