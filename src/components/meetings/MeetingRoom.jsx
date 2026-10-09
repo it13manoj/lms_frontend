@@ -245,10 +245,12 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
   ]);
 
   // Connect to Socket.IO signaling server and sync live participants
+  // Connect to Socket.IO signaling server and manage WebRTC peer connections
   useEffect(() => {
+    let isMounted = true;
     const socketUrl = getSocketUrl();
     console.log('[MeetingRoom] Connecting Socket.IO to:', socketUrl, 'for meeting:', meetingId);
-    
+
     const socket = io(socketUrl, {
       path: '/socket.io',
       transports: ['websocket', 'polling'],
@@ -257,45 +259,34 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
     });
     socketRef.current = socket;
 
-    // Helper to flush queued ICE candidates once remote description is set
+    // Flush queued ICE candidates once remote description is set
     const flushCandidates = async (targetId, pc) => {
       const queue = pendingCandidatesRef.current[targetId] || [];
       if (queue.length > 0) {
+        console.log(`[WebRTC] Flushing ${queue.length} ICE candidates for peer: ${targetId}`);
         for (const cand of queue) {
           try {
             await pc.addIceCandidate(new RTCIceCandidate(cand));
           } catch (e) {
-            console.warn('Flushing ICE candidate note:', e);
+            console.warn('[WebRTC] ICE candidate flush note:', e);
           }
         }
         pendingCandidatesRef.current[targetId] = [];
       }
     };
 
-    // Join room
-    socket.emit('join-meeting', {
-      meetingId,
-      user: {
-        id: user?.id || (isGuest ? 'guest-' + Date.now() : 'user-' + Date.now()),
-        name: selfNameRef.current,
-        role: selfRoleRef.current,
-        isMicOn: isMicOnRef.current,
-        isCameraOn: isCameraOnRef.current,
-        avatarBg: '#3b82f6'
-      }
-    });
-
+    // Helper to create and configure RTCPeerConnection for a peer
     const createPeerConnection = (targetSocketId) => {
       if (peersRef.current[targetSocketId]) {
         return peersRef.current[targetSocketId];
       }
 
+      console.log(`[WebRTC] Creating RTCPeerConnection for: ${targetSocketId}`);
       const pc = new RTCPeerConnection({
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
           { urls: 'stun:stun2.l.google.com:19302' },
-          { urls: 'stun:stun3.l.google.com:19302' },
           { urls: 'stun:stun.cloudflare.com:3478' },
           {
             urls: [
@@ -317,20 +308,23 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
         console.log(`[WebRTC] Peer ${targetSocketId} iceConnectionState:`, pc.iceConnectionState);
       };
 
-      // Attach local media tracks if ready, otherwise add transceivers so SDP always negotiates audio & video
-      if (localStreamRef.current && localStreamRef.current.getTracks().length > 0) {
-        localStreamRef.current.getTracks().forEach(track => {
-          pc.addTrack(track, localStreamRef.current);
+      // Add existing local tracks to this peer connection
+      const activeStream = isScreenSharing && screenStreamRef.current ? screenStreamRef.current : localStreamRef.current;
+      if (activeStream && activeStream.getTracks().length > 0) {
+        activeStream.getTracks().forEach(track => {
+          pc.addTrack(track, activeStream);
         });
       } else {
+        // Add sendrecv transceivers as fallbacks so SDP negotiation includes media sections
         try {
           pc.addTransceiver('audio', { direction: 'sendrecv' });
           pc.addTransceiver('video', { direction: 'sendrecv' });
         } catch (e) {
-          console.warn('Transceiver setup notice:', e);
+          console.warn('[WebRTC] Transceiver setup note:', e);
         }
       }
 
+      // Send local ICE candidates to the remote peer
       pc.onicecandidate = (event) => {
         if (event.candidate) {
           socket.emit('signal', {
@@ -340,7 +334,9 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
         }
       };
 
+      // Receive remote tracks and store into remoteStreams state
       pc.ontrack = (event) => {
+        console.log(`[WebRTC] Received remote track (${event.track.kind}) from ${targetSocketId}`);
         const stream = (event.streams && event.streams[0]) 
           ? event.streams[0] 
           : new MediaStream([event.track]);
@@ -361,9 +357,61 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
       return pc;
     };
 
+    // Acquire local user media before joining the meeting room
+    const initAndJoin = async () => {
+      try {
+        setMediaError('');
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true
+        });
+
+        if (isMounted) {
+          localStreamRef.current = stream;
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = stream;
+          }
+        }
+      } catch (err) {
+        console.warn('Initial camera/mic access notice, trying audio only:', err);
+        try {
+          const audioOnly = await navigator.mediaDevices.getUserMedia({ audio: true });
+          if (isMounted) {
+            localStreamRef.current = audioOnly;
+            setIsCameraOn(false);
+          }
+        } catch (audioErr) {
+          console.warn('No camera or mic permissions, joining in spectator mode:', audioErr);
+          if (isMounted) {
+            setIsCameraOn(false);
+            setIsMicOn(false);
+            setMediaError('Microphone or Camera permission not granted. You are connected in spectator mode.');
+          }
+        }
+      }
+
+      if (!isMounted) return;
+
+      // Join room once local media is initialized
+      socket.emit('join-meeting', {
+        meetingId,
+        user: {
+          id: user?.id || (isGuest ? 'guest-' + Date.now() : 'user-' + Date.now()),
+          name: selfNameRef.current,
+          role: selfRoleRef.current,
+          isMicOn: isMicOnRef.current,
+          isCameraOn: isCameraOnRef.current,
+          avatarBg: '#3b82f6'
+        }
+      });
+    };
+
+    initAndJoin();
+
     // When we receive existing participants in the room
     socket.on('current-participants', async (allInRoom) => {
       const others = allInRoom.filter(p => p.socketId !== socket.id);
+      console.log(`[MeetingRoom] current-participants count: ${others.length}`, others);
 
       setParticipants(prev => {
         const selfPart = prev.find(p => p.isLocal) || {
@@ -388,12 +436,13 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
         return [selfPart, ...otherParts];
       });
 
-      // As the newly joined peer, create an offer for each already existing peer
+      // As the newly joined participant, create WebRTC offer for each existing participant
       for (const peer of others) {
         const pc = createPeerConnection(peer.socketId);
         try {
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
+          console.log(`[WebRTC] Sending offer to existing participant: ${peer.socketId}`);
           socket.emit('signal', {
             targetSocketId: peer.socketId,
             signal: offer
@@ -406,11 +455,12 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
 
     // When another peer joins the room
     socket.on('user-joined', (newParticipant) => {
+      console.log(`[MeetingRoom] User joined: ${newParticipant.name} (${newParticipant.socketId})`);
       setParticipants(prev => {
         if (prev.some(p => p.socketId === newParticipant.socketId)) return prev;
         return [...prev, { ...newParticipant, id: newParticipant.socketId, isLocal: false }];
       });
-      // Prepare peer connection for incoming peer
+      // Pre-create RTCPeerConnection so it's ready when the peer's offer arrives
       if (!peersRef.current[newParticipant.socketId]) {
         createPeerConnection(newParticipant.socketId);
       }
@@ -422,6 +472,7 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
 
       if (signal.type === 'offer') {
         try {
+          console.log(`[WebRTC] Received offer from ${fromSocketId}, setting remote desc and creating answer`);
           await pc.setRemoteDescription(new RTCSessionDescription(signal));
           await flushCandidates(fromSocketId, pc);
           const answer = await pc.createAnswer();
@@ -435,6 +486,7 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
         }
       } else if (signal.type === 'answer') {
         try {
+          console.log(`[WebRTC] Received answer from ${fromSocketId}, setting remote desc`);
           await pc.setRemoteDescription(new RTCSessionDescription(signal));
           await flushCandidates(fromSocketId, pc);
         } catch (err) {
@@ -497,11 +549,20 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
     });
 
     return () => {
+      isMounted = false;
       socket.emit('leave-meeting');
       socket.disconnect();
       Object.values(peersRef.current).forEach(pc => pc.close());
       peersRef.current = {};
       pendingCandidatesRef.current = {};
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => track.stop());
+        localStreamRef.current = null;
+      }
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach(track => track.stop());
+        screenStreamRef.current = null;
+      }
     };
   }, [meetingId]);
 
@@ -546,85 +607,7 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
     return `${String(displayMins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  // Initialize Local Media (Camera & Mic)
-  useEffect(() => {
-    let isMounted = true;
-
-    const startLocalMedia = async () => {
-      try {
-        setMediaError('');
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true
-        });
-
-        if (isMounted) {
-          localStreamRef.current = stream;
-          if (localVideoRef.current) {
-            localVideoRef.current.srcObject = stream;
-          }
-          // Attach local tracks to any already-connected peers using transceiver.sender.replaceTrack
-          const aTrack = stream.getAudioTracks()[0];
-          const vTrack = stream.getVideoTracks()[0];
-          Object.values(peersRef.current).forEach(pc => {
-            try {
-              pc.getTransceivers().forEach(transceiver => {
-                const kind = transceiver.receiver.track.kind || (transceiver.sender.track && transceiver.sender.track.kind);
-                if (kind === 'audio' && aTrack) {
-                  transceiver.sender.replaceTrack(aTrack).catch(e => console.warn('replaceTrack audio error:', e));
-                } else if (kind === 'video' && vTrack) {
-                  transceiver.sender.replaceTrack(vTrack).catch(e => console.warn('replaceTrack video error:', e));
-                }
-              });
-            } catch (err) {
-              console.warn('Transceiver replace error:', err);
-            }
-          });
-        }
-      } catch (err) {
-        console.warn('Camera/Mic permission warning:', err);
-        // Fallback: try audio only
-        try {
-          const audioOnly = await navigator.mediaDevices.getUserMedia({ audio: true });
-          if (isMounted) {
-            localStreamRef.current = audioOnly;
-            setIsCameraOn(false);
-            const aTrack = audioOnly.getAudioTracks()[0];
-            Object.values(peersRef.current).forEach(pc => {
-              try {
-                pc.getTransceivers().forEach(transceiver => {
-                  const kind = transceiver.receiver.track.kind || (transceiver.sender.track && transceiver.sender.track.kind);
-                  if (kind === 'audio' && aTrack) {
-                    transceiver.sender.replaceTrack(aTrack).catch(e => console.warn(e));
-                  }
-                });
-              } catch (e) {}
-            });
-          }
-        } catch (audioErr) {
-          console.warn('No media devices available, joining in viewer mode:', audioErr);
-          setIsCameraOn(false);
-          setIsMicOn(false);
-          setMediaError('Microphone/Camera permission not granted. You are connected in spectator mode.');
-        }
-      }
-    };
-
-    startLocalMedia();
-
-    return () => {
-      isMounted = false;
-      // Stop all tracks on unmount
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(track => track.stop());
-      }
-      if (screenStreamRef.current) {
-        screenStreamRef.current.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, []);
-
-  // Sync Video Element when camera turns on/off
+  // Sync Video Element when camera turns on/off or stream updates
   useEffect(() => {
     if (localStreamRef.current && localVideoRef.current) {
       localVideoRef.current.srcObject = localStreamRef.current;
