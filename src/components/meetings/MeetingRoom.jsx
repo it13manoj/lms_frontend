@@ -37,16 +37,32 @@ const RemoteParticipantVideo = ({ stream, isCameraOn, name, role, avatarBg }) =>
     }
   }, [stream]);
 
+  // Audio unlock listener on user interaction
+  useEffect(() => {
+    const unlockAudio = () => {
+      if (audioRef.current && audioRef.current.paused) {
+        audioRef.current.play().catch(() => {});
+      }
+    };
+    window.addEventListener('click', unlockAudio);
+    window.addEventListener('touchstart', unlockAudio);
+    return () => {
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+    };
+  }, []);
+
   return (
     <div className="participant-remote-container w-100 h-100 position-relative d-flex align-items-center justify-content-center">
       {/* Audio element ensures remote peer voice is ALWAYS heard even if camera is turned off */}
       <audio ref={audioRef} autoPlay playsInline />
 
-      {/* Video element plays remote peer webcam / screen */}
+      {/* Video element is muted so browser autoplay policy NEVER blocks remote video/screen frames */}
       <video 
         ref={videoRef} 
         autoPlay 
         playsInline 
+        muted
         className="participant-video-element" 
         style={{ display: (isCameraOn && stream) ? 'block' : 'none', width: '100%', height: '100%', objectFit: 'cover' }}
       />
@@ -279,9 +295,27 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
           { urls: 'stun:stun2.l.google.com:19302' },
-          { urls: 'stun:stun3.l.google.com:19302' }
+          { urls: 'stun:stun3.l.google.com:19302' },
+          { urls: 'stun:stun.cloudflare.com:3478' },
+          {
+            urls: [
+              'turn:openrelay.metered.ca:80',
+              'turn:openrelay.metered.ca:80?transport=tcp',
+              'turn:openrelay.metered.ca:443',
+              'turn:openrelay.metered.ca:443?transport=tcp'
+            ],
+            username: 'openrelay',
+            credential: 'openrelay'
+          }
         ]
       });
+
+      pc.onconnectionstatechange = () => {
+        console.log(`[WebRTC] Peer ${targetSocketId} connectionState:`, pc.connectionState);
+      };
+      pc.oniceconnectionstatechange = () => {
+        console.log(`[WebRTC] Peer ${targetSocketId} iceConnectionState:`, pc.iceConnectionState);
+      };
 
       // Attach local media tracks if ready, otherwise add transceivers so SDP always negotiates audio & video
       if (localStreamRef.current && localStreamRef.current.getTracks().length > 0) {
@@ -529,26 +563,21 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
           if (localVideoRef.current) {
             localVideoRef.current.srcObject = stream;
           }
-          // Attach local tracks to any already-connected peers using sender.replaceTrack
+          // Attach local tracks to any already-connected peers using transceiver.sender.replaceTrack
           const aTrack = stream.getAudioTracks()[0];
           const vTrack = stream.getVideoTracks()[0];
           Object.values(peersRef.current).forEach(pc => {
-            const senders = pc.getSenders();
-            if (aTrack) {
-              const aSender = senders.find(s => s.track && s.track.kind === 'audio') || senders.find(s => !s.track);
-              if (aSender) {
-                aSender.replaceTrack(aTrack).catch(e => console.warn('replaceTrack audio error:', e));
-              } else {
-                try { pc.addTrack(aTrack, stream); } catch (e) {}
-              }
-            }
-            if (vTrack) {
-              const vSender = senders.find(s => s.track && s.track.kind === 'video') || senders.find(s => !s.track);
-              if (vSender) {
-                vSender.replaceTrack(vTrack).catch(e => console.warn('replaceTrack video error:', e));
-              } else {
-                try { pc.addTrack(vTrack, stream); } catch (e) {}
-              }
+            try {
+              pc.getTransceivers().forEach(transceiver => {
+                const kind = transceiver.receiver.track.kind || (transceiver.sender.track && transceiver.sender.track.kind);
+                if (kind === 'audio' && aTrack) {
+                  transceiver.sender.replaceTrack(aTrack).catch(e => console.warn('replaceTrack audio error:', e));
+                } else if (kind === 'video' && vTrack) {
+                  transceiver.sender.replaceTrack(vTrack).catch(e => console.warn('replaceTrack video error:', e));
+                }
+              });
+            } catch (err) {
+              console.warn('Transceiver replace error:', err);
             }
           });
         }
@@ -562,15 +591,14 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
             setIsCameraOn(false);
             const aTrack = audioOnly.getAudioTracks()[0];
             Object.values(peersRef.current).forEach(pc => {
-              const senders = pc.getSenders();
-              if (aTrack) {
-                const aSender = senders.find(s => s.track && s.track.kind === 'audio') || senders.find(s => !s.track);
-                if (aSender) {
-                  aSender.replaceTrack(aTrack).catch(e => console.warn(e));
-                } else {
-                  try { pc.addTrack(aTrack, audioOnly); } catch (e) {}
-                }
-              }
+              try {
+                pc.getTransceivers().forEach(transceiver => {
+                  const kind = transceiver.receiver.track.kind || (transceiver.sender.track && transceiver.sender.track.kind);
+                  if (kind === 'audio' && aTrack) {
+                    transceiver.sender.replaceTrack(aTrack).catch(e => console.warn(e));
+                  }
+                });
+              } catch (e) {}
             });
           }
         } catch (audioErr) {
@@ -670,10 +698,15 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
         const screenTrack = screenStream.getVideoTracks()[0];
         if (screenTrack) {
           Object.values(peersRef.current).forEach(pc => {
-            const senders = pc.getSenders();
-            const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-            if (videoSender) {
-              videoSender.replaceTrack(screenTrack).catch(e => console.warn('replaceTrack screen share error:', e));
+            try {
+              pc.getTransceivers().forEach(transceiver => {
+                const kind = transceiver.receiver.track.kind || (transceiver.sender.track && transceiver.sender.track.kind);
+                if (kind === 'video') {
+                  transceiver.sender.replaceTrack(screenTrack).catch(e => console.warn('replaceTrack screen share error:', e));
+                }
+              });
+            } catch (err) {
+              console.warn('Screen share replace error:', err);
             }
           });
         }
@@ -713,10 +746,15 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
     // Revert video track in all active RTCPeerConnections back to local camera track
     const camTrack = localStreamRef.current?.getVideoTracks()[0] || null;
     Object.values(peersRef.current).forEach(pc => {
-      const senders = pc.getSenders();
-      const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-      if (videoSender && camTrack) {
-        videoSender.replaceTrack(camTrack).catch(e => console.warn('replaceTrack revert camera error:', e));
+      try {
+        pc.getTransceivers().forEach(transceiver => {
+          const kind = transceiver.receiver.track.kind || (transceiver.sender.track && transceiver.sender.track.kind);
+          if (kind === 'video') {
+            transceiver.sender.replaceTrack(camTrack).catch(e => console.warn('replaceTrack revert camera error:', e));
+          }
+        });
+      } catch (err) {
+        console.warn('Revert camera error:', err);
       }
     });
 
