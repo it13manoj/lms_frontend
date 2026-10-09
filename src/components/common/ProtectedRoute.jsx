@@ -1,19 +1,20 @@
 import React from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 // Define role-based route access
 const ROLE_ROUTES = {
-  admin: ['/dashboard', '/employees', '/profile', '/leave', '/leave/*', '/attendance', '/salary', '/policies', '/holidays', '/payments', '/performance', '/reports', '/settings'],
-  hr: ['/dashboard', '/employees', '/profile', '/leave', '/leave/*', '/attendance', '/salary', '/policies', '/holidays', '/payments', '/performance'],
-  manager: ['/dashboard', '/employees', '/profile', '/leave', '/leave/*', '/attendance', '/salary', '/policies', '/holidays', '/performance'],
-  sales: ['/dashboard', '/profile', '/leave', '/leave/*', '/attendance', '/salary', '/policies'],
-  team: ['/dashboard', '/profile', '/leave', '/leave/*', '/attendance', '/salary', '/policies'],
-  employee: ['/dashboard', '/profile', '/leave', '/leave/*', '/attendance', '/salary', '/policies']
+  admin: ['/dashboard', '/employees', '/employees/*', '/profile', '/profile/*', '/leave', '/leave/*', '/attendance', '/salary', '/salary/*', '/policies', '/policies/*', '/holidays', '/payments', '/performance', '/performance/*', '/meetings', '/meetings/*', '/reports', '/settings'],
+  hr: ['/dashboard', '/employees', '/employees/*', '/profile', '/profile/*', '/leave', '/leave/*', '/attendance', '/salary', '/salary/*', '/policies', '/policies/*', '/holidays', '/payments', '/performance', '/performance/*', '/meetings', '/meetings/*'],
+  manager: ['/dashboard', '/employees', '/employees/*', '/profile', '/profile/*', '/leave', '/leave/*', '/attendance', '/salary', '/salary/*', '/policies', '/policies/*', '/holidays', '/performance', '/performance/*', '/meetings', '/meetings/*'],
+  sales: ['/dashboard', '/profile', '/profile/*', '/leave', '/leave/*', '/attendance', '/salary', '/salary/*', '/policies', '/policies/*', '/holidays', '/meetings', '/meetings/*'],
+  team: ['/dashboard', '/profile', '/profile/*', '/leave', '/leave/*', '/attendance', '/salary', '/salary/*', '/policies', '/policies/*', '/holidays', '/meetings', '/meetings/*'],
+  employee: ['/dashboard', '/profile', '/profile/*', '/leave', '/leave/*', '/attendance', '/salary', '/salary/*', '/policies', '/policies/*', '/holidays', '/meetings', '/meetings/*']
 };
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading, isAuthenticated } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -38,8 +39,13 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 
   // Check if user has access to this route based on their role
   const userRoutes = ROLE_ROUTES[userRole] || ROLE_ROUTES.employee;
-  const currentPath = window.location.pathname;
+  const currentPath = location.pathname;
   
+  // Dashboard and root are always accessible to authenticated users
+  if (currentPath === '/' || currentPath === '/dashboard') {
+    return children || <Outlet />;
+  }
+
   // Check if current path is accessible for this role
   const hasAccess = userRoutes.some(route => {
     if (route.includes('*')) {
