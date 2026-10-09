@@ -8,7 +8,9 @@
   color: #fff;
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 1000;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   box-shadow: 2px 0 20px rgba(0, 0, 0, 0.1);
 }
 
@@ -40,6 +42,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .logo-container {
@@ -78,6 +81,7 @@
   align-items: center;
   gap: 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
 }
 
 .user-avatar {
@@ -143,7 +147,24 @@
 
 /* Navigation */
 .sidebar-nav {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 10px 0 20px;
+  min-height: 0;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sidebar-nav::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
 }
 
 .nav-item {
@@ -262,11 +283,13 @@
 
 /* Sidebar Footer */
 .sidebar-footer {
-  position: absolute;
-  bottom: 0;
+  position: relative;
+  flex-shrink: 0;
   width: 100%;
-  padding: 20px;
+  padding: 15px 20px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: #111a2e;
+  z-index: 10;
 }
 
 .logout-btn {
