@@ -3,7 +3,8 @@ import { Row, Col, Card, Spinner, Alert } from 'react-bootstrap';
 import { 
   FaUsers, FaUserCheck, FaCalendarCheck, FaMoneyBillWave,
   FaClock, FaFileAlt, FaChartLine, FaGift, FaUserTie,
-  FaBuilding, FaHandshake, FaClipboardList, FaArrowRight
+  FaBuilding, FaHandshake, FaClipboardList, FaArrowRight,
+  FaVideo, FaCalendarAlt
 } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -294,30 +295,57 @@ const Dashboard = () => {
 
         <Col xs={12} lg={5}>
           <Card className="upcoming-events-card shadow-sm border-0 h-100">
-            <Card.Header className="bg-white py-3">
-              <h5 className="mb-0 fs-6 fs-md-5">
-                <FaGift className="me-2" />
-                Upcoming Events
+            <Card.Header className="bg-white py-3 d-flex justify-content-between align-items-center">
+              <h5 className="mb-0 fs-6 fs-md-5 d-flex align-items-center gap-2">
+                <FaVideo className="text-primary" />
+                <span>Upcoming Meetings & Events</span>
               </h5>
+              <Link to="/meetings" className="text-decoration-none small text-primary fw-semibold">
+                View All →
+              </Link>
             </Card.Header>
             <Card.Body className="p-3">
               {stats.upcomingEvents && stats.upcomingEvents.length > 0 ? (
                 <div className="event-list">
                   {stats.upcomingEvents.map((event) => (
                     <div key={event.id} className="event-item d-flex align-items-center gap-3 pb-3 mb-3 border-bottom last-border-0">
-                      <div className="event-date text-center bg-light p-2 rounded border" style={{ minWidth: '50px' }}>
+                      <div className="event-date text-center bg-light p-2 rounded border" style={{ minWidth: '55px' }}>
                         <span className="event-day d-block fw-bold fs-6 text-primary">{event.day}</span>
-                        <span className="event-month d-block text-uppercase x-small text-muted">{event.month}</span>
+                        <span className="event-month d-block text-uppercase x-small text-muted" style={{ fontSize: '10px' }}>{event.month}</span>
                       </div>
-                      <div className="event-info flex-grow-1">
-                        <h6 className="event-title mb-1 fs-6 fw-semibold">{event.title}</h6>
-                        <span className="event-type badge bg-secondary bg-opacity-10 text-secondary">{event.type}</span>
+                      <div className="event-info flex-grow-1 overflow-hidden">
+                        <div className="d-flex align-items-center gap-2 mb-1">
+                          <h6 className="event-title mb-0 fs-6 fw-semibold text-truncate">{event.title}</h6>
+                          <span className={`badge ${event.status === 'in-progress' ? 'bg-success' : 'bg-primary bg-opacity-10 text-primary'}`} style={{ fontSize: '10px' }}>
+                            {event.type}
+                          </span>
+                        </div>
+                        <div className="text-muted small d-flex align-items-center gap-2" style={{ fontSize: '12px' }}>
+                          <span>🕒 {event.time || '10:00'} ({event.duration || 45}m)</span>
+                          {event.host && <span>• Host: {event.host}</span>}
+                        </div>
                       </div>
+                      {event.meeting_link && (
+                        <Link 
+                          to={event.meeting_link}
+                          className="btn btn-sm btn-outline-primary py-1 px-2 d-flex align-items-center gap-1 flex-shrink-0"
+                          style={{ fontSize: '12px' }}
+                        >
+                          <FaVideo size={11} />
+                          <span>Join</span>
+                        </Link>
+                      )}
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-center text-muted py-4 mb-0">No upcoming events</p>
+                <div className="text-center text-muted py-4">
+                  <FaCalendarAlt size={24} className="mb-2 text-secondary" />
+                  <p className="mb-0 small">No upcoming meetings or events</p>
+                  <Link to="/meetings" className="btn btn-sm btn-primary mt-2">
+                    Schedule a Meeting
+                  </Link>
+                </div>
               )}
             </Card.Body>
           </Card>
