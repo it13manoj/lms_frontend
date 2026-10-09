@@ -62,6 +62,27 @@ const MeetingPanel = () => {
   const [copiedId, setCopiedId] = useState(null);
   const [copiedGuestId, setCopiedGuestId] = useState(null);
 
+  // Registered Employees State for Inviting to Meetings
+  const [allEmployees, setAllEmployees] = useState([]);
+  const [selectedEmployees, setSelectedEmployees] = useState([]);
+  const [empSearch, setEmpSearch] = useState('');
+
+  // Fetch Registered Employees
+  const fetchEmployeesList = async () => {
+    try {
+      const res = await api.get('/employees', { params: { limit: 100 } });
+      if (res.data && res.data.data) {
+        setAllEmployees(res.data.data);
+      }
+    } catch (err) {
+      console.warn('Could not load registered employees for invite dropdown:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchEmployeesList();
+  }, []);
+
   // Fetch Meetings
   const fetchMeetings = async () => {
     try {
@@ -87,6 +108,48 @@ const MeetingPanel = () => {
   useEffect(() => {
     fetchMeetings();
   }, [statusFilter, searchQuery]);
+
+  // Filter employees by search query
+  const filteredEmployees = allEmployees.filter(emp => {
+    const fullName = `${emp.first_name || ''} ${emp.last_name || ''}`.toLowerCase();
+    const dept = (emp.department || '').toLowerCase();
+    const pos = (emp.position || '').toLowerCase();
+    const query = empSearch.toLowerCase();
+    return fullName.includes(query) || dept.includes(query) || pos.includes(query);
+  });
+
+  const handleToggleEmployee = (emp) => {
+    setSelectedEmployees(prev => {
+      const exists = prev.some(e => e.id === emp.id);
+      if (exists) {
+        return prev.filter(e => e.id !== emp.id);
+      } else {
+        const empItem = {
+          id: emp.id,
+          name: `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || emp.email,
+          email: emp.email,
+          department: emp.department || 'General',
+          role: emp.position || 'Staff'
+        };
+        return [...prev, empItem];
+      }
+    });
+  };
+
+  const handleSelectAllEmployees = () => {
+    if (selectedEmployees.length === filteredEmployees.length && filteredEmployees.length > 0) {
+      setSelectedEmployees([]);
+    } else {
+      const allItems = filteredEmployees.map(emp => ({
+        id: emp.id,
+        name: `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || emp.email,
+        email: emp.email,
+        department: emp.department || 'General',
+        role: emp.position || 'Staff'
+      }));
+      setSelectedEmployees(allItems);
+    }
+  };
 
   // Handle URL deep link into a meeting room: e.g. /meetings/ptk-123-456
   useEffect(() => {
@@ -141,6 +204,7 @@ const MeetingPanel = () => {
       setScheduling(true);
       const payload = {
         ...scheduleData,
+        invited_employees: selectedEmployees,
         settings: {
           allowScreenShare: scheduleData.allowScreenShare,
           allowChat: scheduleData.allowChat,
@@ -151,6 +215,7 @@ const MeetingPanel = () => {
       const res = await api.post('/meetings', payload);
       if (res.data && res.data.success) {
         setShowScheduleModal(false);
+        setSelectedEmployees([]);
         setActionSuccess(`Meeting "${scheduleData.title}" scheduled successfully! Share Code: ${res.data.data?.meeting_id}`);
         fetchMeetings();
       }
@@ -665,6 +730,113 @@ const MeetingPanel = () => {
                     <option value="Management">Executive Management</option>
                   </Form.Select>
                 </Form.Group>
+              </Col>
+
+              {/* Employee Selection Dropdown / Multi-Select */}
+              <Col xs={12}>
+                <div className="border rounded p-3 bg-white">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <Form.Label className="small fw-bold mb-0 d-flex align-items-center gap-2">
+                      <FaUsers className="text-primary" />
+                      <span>Select Employees to Invite ({selectedEmployees.length} selected)</span>
+                    </Form.Label>
+                    <div className="d-flex gap-2">
+                      <Button 
+                        variant="link" 
+                        size="sm" 
+                        className="p-0 text-decoration-none small"
+                        onClick={handleSelectAllEmployees}
+                      >
+                        {selectedEmployees.length === filteredEmployees.length && filteredEmployees.length > 0 ? 'Deselect All' : 'Select All'}
+                      </Button>
+                      {selectedEmployees.length > 0 && (
+                        <Button 
+                          variant="link" 
+                          size="sm" 
+                          className="p-0 text-danger text-decoration-none small"
+                          onClick={() => setSelectedEmployees([])}
+                        >
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Search box for employees */}
+                  <InputGroup size="sm" className="mb-2">
+                    <InputGroup.Text className="bg-light border-secondary">
+                      <FaSearch size={12} className="text-muted" />
+                    </InputGroup.Text>
+                    <Form.Control
+                      type="text"
+                      placeholder="Search registered employees by name, department, position..."
+                      value={empSearch}
+                      onChange={(e) => setEmpSearch(e.target.value)}
+                    />
+                  </InputGroup>
+
+                  {/* Selected employees pill badges */}
+                  {selectedEmployees.length > 0 && (
+                    <div className="d-flex flex-wrap gap-1 mb-2 p-2 rounded bg-light border">
+                      {selectedEmployees.map(emp => (
+                        <Badge 
+                          key={emp.id} 
+                          bg="primary" 
+                          className="d-flex align-items-center gap-1 py-1 px-2 fw-normal"
+                        >
+                          <span>{emp.name}</span>
+                          <span 
+                            role="button" 
+                            onClick={() => handleToggleEmployee(emp)}
+                            style={{ cursor: 'pointer', fontWeight: 'bold' }}
+                          >
+                            ×
+                          </span>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Scrollable list of registered employees */}
+                  <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
+                    {filteredEmployees.length === 0 ? (
+                      <div className="text-center text-muted py-3 small">
+                        No registered employees found.
+                      </div>
+                    ) : (
+                      filteredEmployees.map(emp => {
+                        const isSelected = selectedEmployees.some(e => e.id === emp.id);
+                        const empName = `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || emp.email;
+                        return (
+                          <div 
+                            key={emp.id}
+                            onClick={() => handleToggleEmployee(emp)}
+                            className={`d-flex align-items-center justify-content-between p-2 border-bottom ${isSelected ? 'bg-primary bg-opacity-10' : 'bg-white'}`}
+                            style={{ cursor: 'pointer', transition: 'background 0.15s ease' }}
+                          >
+                            <div className="d-flex align-items-center gap-2">
+                              <Form.Check 
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {}}
+                                style={{ pointerEvents: 'none' }}
+                              />
+                              <div>
+                                <div className="fw-semibold small text-dark">{empName}</div>
+                                <div className="text-muted" style={{ fontSize: '11px' }}>
+                                  {emp.department || 'General'} • {emp.position || 'Staff'}
+                                </div>
+                              </div>
+                            </div>
+                            <span className="text-muted font-monospace small" style={{ fontSize: '11px' }}>
+                              {emp.email}
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
               </Col>
 
               <Col xs={12} md={6}>

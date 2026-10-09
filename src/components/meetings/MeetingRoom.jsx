@@ -132,7 +132,7 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
     : (user?.employee?.first_name ? `${user.employee.first_name} ${user.employee.last_name || ''}` : (user?.email?.split('@')[0] || 'You'));
   const selfRole = isGuest ? 'Guest' : (user?.role === 'admin' ? 'Host (Admin)' : 'Participant');
 
-  // Simulated Team Participants for Group Meetings
+  // Only real registered participants in the meeting room
   const [participants, setParticipants] = useState([
     {
       id: 'self',
@@ -143,38 +143,56 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
       isCameraOn: true,
       isSpeaking: false,
       avatarBg: '#3b82f6'
-    },
-    {
-      id: 'p-1',
-      name: 'Rohan Verma',
-      role: 'Project Lead',
-      isLocal: false,
-      isMicOn: true,
-      isCameraOn: true,
-      isSpeaking: true,
-      avatarBg: '#10b981'
-    },
-    {
-      id: 'p-2',
-      name: 'Pooja Patel',
-      role: 'Quality Analyst',
-      isLocal: false,
-      isMicOn: false,
-      isCameraOn: false,
-      isSpeaking: false,
-      avatarBg: '#8b5cf6'
-    },
-    {
-      id: 'p-3',
-      name: 'Amit Sharma',
-      role: 'Technical Architect',
-      isLocal: false,
-      isMicOn: true,
-      isCameraOn: false,
-      isSpeaking: false,
-      avatarBg: '#f59e0b'
     }
   ]);
+
+  // Load registered employees invited to this meeting
+  useEffect(() => {
+    if (meeting) {
+      let invitedList = [];
+      if (meeting.invited_employees) {
+        try {
+          invitedList = typeof meeting.invited_employees === 'string'
+            ? JSON.parse(meeting.invited_employees)
+            : meeting.invited_employees;
+        } catch (e) {
+          invitedList = [];
+        }
+      }
+
+      const colors = ['#10b981', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#6366f1'];
+
+      if (Array.isArray(invitedList) && invitedList.length > 0) {
+        setParticipants(prev => {
+          const selfPart = prev.find(p => p.isLocal) || {
+            id: 'self',
+            name: selfName,
+            role: selfRole,
+            isLocal: true,
+            isMicOn: isMicOn,
+            isCameraOn: isCameraOn,
+            isSpeaking: false,
+            avatarBg: '#3b82f6'
+          };
+
+          const newOthers = invitedList
+            .filter(emp => emp.email !== user?.email && emp.name !== selfName)
+            .map((emp, idx) => ({
+              id: `emp-${emp.id || idx}`,
+              name: emp.name || `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || emp.email,
+              role: emp.role || emp.position || emp.department || 'Registered Employee',
+              isLocal: false,
+              isMicOn: false,
+              isCameraOn: false,
+              isSpeaking: false,
+              avatarBg: colors[idx % colors.length]
+            }));
+
+          return [selfPart, ...newOthers];
+        });
+      }
+    }
+  }, [meeting, selfName, selfRole, user, isMicOn, isCameraOn]);
 
   // Fetch Meeting Details
   useEffect(() => {
@@ -308,6 +326,14 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
     }
   };
 
+  // Synchronize Screen Sharing Video Stream to DOM
+  useEffect(() => {
+    if (isScreenSharing && screenStreamRef.current && screenVideoRef.current) {
+      screenVideoRef.current.srcObject = screenStreamRef.current;
+      screenVideoRef.current.play().catch(err => console.warn('Screen share autoplay notice:', err));
+    }
+  }, [isScreenSharing]);
+
   // Toggle Screen Sharing
   const toggleScreenShare = async () => {
     if (isScreenSharing) {
@@ -323,9 +349,12 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
         screenStreamRef.current = screenStream;
         setIsScreenSharing(true);
 
-        if (screenVideoRef.current) {
-          screenVideoRef.current.srcObject = screenStream;
-        }
+        setTimeout(() => {
+          if (screenVideoRef.current && screenStreamRef.current) {
+            screenVideoRef.current.srcObject = screenStreamRef.current;
+            screenVideoRef.current.play().catch(e => console.warn('Screen video play error:', e));
+          }
+        }, 100);
 
         // Handle user clicking "Stop sharing" from browser native chrome banner
         const videoTrack = screenStream.getVideoTracks()[0];
@@ -744,6 +773,7 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
                   ref={screenVideoRef} 
                   autoPlay 
                   playsInline 
+                  muted
                   className="screen-share-video" 
                 />
               </div>
