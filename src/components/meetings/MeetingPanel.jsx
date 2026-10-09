@@ -183,6 +183,7 @@ const MeetingPanel = () => {
 
       const res = await api.post('/meetings', payload);
       if (res.data && res.data.success) {
+        navigate(`/meetings/${res.data.data.meeting_id}`);
         setActiveMeetingInRoom(res.data.data);
       }
     } catch (err) {
@@ -237,11 +238,13 @@ const MeetingPanel = () => {
     }
 
     setShowJoinModal(false);
+    navigate(`/meetings/${code}`);
     setActiveMeetingInRoom({ meeting_id: code, title: `Meeting Room (${code})` });
   };
 
   // Join Existing Meeting
   const handleJoinMeeting = (meeting) => {
+    navigate(`/meetings/${meeting.meeting_id}`);
     setActiveMeetingInRoom(meeting);
   };
 
