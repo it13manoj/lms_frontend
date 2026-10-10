@@ -7,7 +7,7 @@ import {
   FaFileAlt, FaPlus, FaPrint, FaSearch, FaFilter, 
   FaTrash, FaEdit, FaEye, FaUserTie, FaCheckCircle, 
   FaBuilding, FaAward, FaCalendarAlt, FaMoneyBillWave,
-  FaColumns, FaDesktop 
+  FaColumns, FaDesktop, FaTimes 
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import letterService from '../../services/letterService';
@@ -215,9 +215,119 @@ export default function LetterList({ defaultType = 'all' }) {
     }
   };
 
-  // Print Action
+  // Print Action - Isolated iframe print with full fidelity and no white page
   const handlePrintLetter = () => {
-    window.print();
+    const printArea = document.querySelector('.letter-preview-print-area');
+    if (!printArea) {
+      window.print();
+      return;
+    }
+
+    // Clean up any previously appended print iframe
+    const oldIframe = document.getElementById('letter-print-iframe');
+    if (oldIframe) {
+      oldIframe.remove();
+    }
+
+    const iframe = document.createElement('iframe');
+    iframe.id = 'letter-print-iframe';
+    iframe.style.position = 'fixed';
+    iframe.style.top = '-10000px';
+    iframe.style.left = '-10000px';
+    iframe.style.width = '210mm';
+    iframe.style.height = '297mm';
+    iframe.style.border = 'none';
+    document.body.appendChild(iframe);
+
+    const pri = iframe.contentWindow;
+    pri.document.open();
+    pri.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>${previewLetter?.reference_no || 'Document'} - ${previewLetter?.candidate_name || 'Letter'}</title>
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 0mm;
+            }
+            * {
+              box-sizing: border-box;
+            }
+            html, body {
+              margin: 0 !important;
+              padding: 0 !important;
+              width: 210mm !important;
+              min-height: 297mm !important;
+              background: #ffffff !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .printable-letter-container {
+              background: #ffffff !important;
+              padding: 0 !important;
+              margin: 0 !important;
+              display: flex !important;
+              justify-content: center !important;
+              width: 210mm !important;
+              min-height: 297mm !important;
+            }
+            .printable-letter-container > div {
+              box-shadow: none !important;
+            }
+          </style>
+        </head>
+        <body>
+          ${printArea.innerHTML}
+        </body>
+      </html>
+    `);
+    pri.document.close();
+
+    const doPrint = () => {
+      try {
+        pri.focus();
+        pri.print();
+      } catch (err) {
+        console.error('Print iframe error:', err);
+        window.print();
+      }
+      setTimeout(() => {
+        const frame = document.getElementById('letter-print-iframe');
+        if (frame) frame.remove();
+      }, 2000);
+    };
+
+    // Wait for images (company logo, seal, etc.) to load before printing
+    const imgs = pri.document.images;
+    if (!imgs || imgs.length === 0) {
+      setTimeout(doPrint, 200);
+    } else {
+      let loaded = 0;
+      let completed = false;
+      const onImageLoaded = () => {
+        loaded++;
+        if (loaded >= imgs.length && !completed) {
+          completed = true;
+          setTimeout(doPrint, 150);
+        }
+      };
+      for (let i = 0; i < imgs.length; i++) {
+        if (imgs[i].complete) {
+          onImageLoaded();
+        } else {
+          imgs[i].onload = onImageLoaded;
+          imgs[i].onerror = onImageLoaded;
+        }
+      }
+      setTimeout(() => {
+        if (!completed) {
+          completed = true;
+          doPrint();
+        }
+      }, 700);
+    }
   };
 
   // Render Preview component based on letter_type
@@ -868,18 +978,38 @@ export default function LetterList({ defaultType = 'all' }) {
         show={showPreviewModal} 
         onHide={() => setShowPreviewModal(false)} 
         dialogClassName="letter-preview-modal"
-        fullscreen="lg-down"
+        fullscreen="md-down"
         backdrop="static"
       >
-        <Modal.Header closeButton className="no-print bg-white border-bottom py-2 px-3">
-          <Modal.Title className="fs-6 fw-bold d-flex align-items-center gap-2 mb-0">
-            <span>{previewLetter?.reference_no}</span>
-            <Badge bg="secondary" className="fw-normal">
-              {previewLetter?.letter_type?.toUpperCase()}
-            </Badge>
-          </Modal.Title>
-          <div className="ms-auto me-3 d-flex align-items-center gap-2">
-            <div className="d-flex align-items-center gap-1 me-2">
+        <Modal.Header closeButton onHide={() => setShowPreviewModal(false)} className="no-print bg-white border-bottom py-2 px-3">
+          <div className="d-flex align-items-center gap-2 flex-grow-1 flex-wrap">
+            <Modal.Title className="fs-6 fw-bold d-flex align-items-center gap-2 mb-0">
+              <span className="text-primary">{previewLetter?.reference_no}</span>
+              <Badge 
+                bg={
+                  previewLetter?.letter_type === 'joining' ? 'primary' :
+                  previewLetter?.letter_type === 'experience' ? 'warning' : 'danger'
+                } 
+                className="fw-semibold text-uppercase text-dark"
+                style={{
+                  backgroundColor: previewLetter?.letter_type === 'experience' ? '#f3e8ff' : undefined,
+                  color: previewLetter?.letter_type === 'experience' ? '#6b21a8' : undefined,
+                  border: previewLetter?.letter_type === 'experience' ? '1px solid #e9d5ff' : undefined
+                }}
+              >
+                {previewLetter?.letter_type === 'experience' ? 'Experience Certificate' :
+                 previewLetter?.letter_type === 'joining' ? 'Joining Letter' : 'Offer Letter'}
+              </Badge>
+            </Modal.Title>
+            {previewLetter?.candidate_name && (
+              <span className="text-muted small d-none d-md-inline">
+                | {previewLetter.candidate_name}
+              </span>
+            )}
+          </div>
+
+          <div className="d-flex align-items-center gap-2 me-2">
+            <div className="d-flex align-items-center gap-1 me-2 d-none d-sm-flex">
               <span className="text-secondary small me-1">Scale:</span>
               {[0.75, 0.85, 1.0, 1.1].map(z => (
                 <Button 
@@ -894,12 +1024,30 @@ export default function LetterList({ defaultType = 'all' }) {
                 </Button>
               ))}
             </div>
-            <Button variant="success" size="sm" onClick={handlePrintLetter} className="d-flex align-items-center gap-1 shadow-sm">
+
+            <Button 
+              variant="success" 
+              size="sm" 
+              onClick={handlePrintLetter} 
+              className="d-flex align-items-center gap-1 shadow-sm px-3"
+            >
               <FaPrint size={13} />
               <span>Print / Save PDF</span>
             </Button>
+
+            <Button 
+              variant="outline-secondary" 
+              size="sm" 
+              onClick={() => setShowPreviewModal(false)}
+              className="d-flex align-items-center gap-1 px-2"
+              title="Close Popup"
+            >
+              <FaTimes size={13} />
+              <span className="d-none d-sm-inline">Close</span>
+            </Button>
           </div>
         </Modal.Header>
+
         <Modal.Body className="p-0 bg-secondary bg-opacity-10 d-flex flex-column align-items-center">
           <div 
             className="letter-zoom-viewport py-3"
@@ -913,6 +1061,32 @@ export default function LetterList({ defaultType = 'all' }) {
             </div>
           </div>
         </Modal.Body>
+
+        <Modal.Footer className="no-print bg-white border-top py-2 px-3 d-flex justify-content-between align-items-center">
+          <div className="text-muted small">
+            <span className="fw-semibold text-dark">Document:</span> A4 Sheet (210mm × 297mm) • {previewLetter?.candidate_name || 'Official Letter'}
+          </div>
+          <div className="d-flex align-items-center gap-2">
+            <Button 
+              variant="secondary" 
+              size="sm" 
+              onClick={() => setShowPreviewModal(false)}
+              className="d-flex align-items-center gap-1 px-3"
+            >
+              <FaTimes size={13} />
+              <span>Close</span>
+            </Button>
+            <Button 
+              variant="success" 
+              size="sm" 
+              onClick={handlePrintLetter} 
+              className="d-flex align-items-center gap-1 shadow-sm px-3"
+            >
+              <FaPrint size={13} />
+              <span>Print / Save PDF</span>
+            </Button>
+          </div>
+        </Modal.Footer>
       </Modal>
     </div>
   );

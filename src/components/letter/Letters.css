@@ -47,15 +47,19 @@
 }
 
 /* Modal Styling */
-.letter-generate-modal .modal-dialog {
-  max-width: 96vw;
-  width: 96vw;
-  margin: 1rem auto;
+.modal-dialog.letter-generate-modal,
+.letter-generate-modal.modal-dialog,
+.letter-generate-modal {
+  max-width: 96vw !important;
+  width: 96vw !important;
+  margin: 1rem auto !important;
 }
 
 @media (min-width: 1400px) {
-  .letter-generate-modal .modal-dialog {
-    max-width: 1450px;
+  .modal-dialog.letter-generate-modal,
+  .letter-generate-modal.modal-dialog,
+  .letter-generate-modal {
+    max-width: 1450px !important;
   }
 }
 
@@ -120,30 +124,41 @@
   justify-content: center;
 }
 
-/* Dedicated Preview Modal */
-.letter-preview-modal .modal-dialog {
-  max-width: 1100px;
-  width: 95vw;
-  margin: 1.5rem auto;
+/* Dedicated Preview Modal - Sized specifically for A4 (210mm ~ 794px + frame padding) */
+.modal-dialog.letter-preview-modal,
+.letter-preview-modal.modal-dialog,
+.letter-preview-modal {
+  max-width: 900px !important;
+  width: 92vw !important;
+  margin: 1.25rem auto !important;
 }
 
-@media (min-width: 1400px) {
-  .letter-preview-modal .modal-dialog {
-    max-width: 1250px;
+@media (min-width: 1200px) {
+  .modal-dialog.letter-preview-modal,
+  .letter-preview-modal.modal-dialog,
+  .letter-preview-modal {
+    max-width: 920px !important;
+    width: 920px !important;
   }
 }
 
 .letter-preview-modal .modal-content {
-  border-radius: 14px;
-  border: none;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
   overflow: hidden;
+}
+
+.letter-preview-modal .modal-header {
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 12px 20px;
 }
 
 .letter-preview-modal .modal-body {
   background-color: #cbd5e1;
   padding: 20px 10px 40px;
-  max-height: 85vh;
+  max-height: 80vh;
   overflow-y: auto;
   overflow-x: auto;
   display: flex;
@@ -151,35 +166,91 @@
   align-items: center;
 }
 
+.letter-preview-modal .modal-footer {
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  padding: 10px 20px;
+}
+
 /* Print Specific Rules */
 @media print {
+  /* Hide the rest of the application */
   body * {
     visibility: hidden;
   }
   
+  /* Make the letter modal content visible */
+  .letter-preview-modal,
+  .letter-preview-modal *,
   .letter-preview-print-area,
   .letter-preview-print-area * {
     visibility: visible !important;
   }
 
-  .letter-preview-print-area {
-    position: absolute;
-    left: 0;
-    top: 0;
+  .letter-preview-modal {
+    position: static !important;
+    display: block !important;
     width: 210mm !important;
-    height: 297mm !important;
+    max-width: 210mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: none !important;
+  }
+
+  .letter-preview-modal .modal-content,
+  .letter-preview-modal .modal-body {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  .letter-preview-modal .modal-header,
+  .letter-preview-modal .modal-footer,
+  .letter-preview-modal .btn-close,
+  .modal-backdrop,
+  .no-print {
+    display: none !important;
+  }
+
+  .letter-zoom-viewport {
+    transform: none !important;
+    margin-bottom: 0 !important;
+    display: block !important;
+    padding: 0 !important;
+  }
+
+  .letter-preview-print-area {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 210mm !important;
+    min-height: 297mm !important;
     margin: 0 !important;
     padding: 0 !important;
     background: transparent !important;
   }
 
-  .no-print {
-    display: none !important;
+  .printable-letter-container {
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: flex !important;
+    justify-content: center !important;
+    width: 210mm !important;
+  }
+
+  .printable-letter-container > div {
+    box-shadow: none !important;
   }
 
   @page {
     size: A4 portrait;
-    margin: 0;
+    margin: 0mm;
   }
 }
+
 

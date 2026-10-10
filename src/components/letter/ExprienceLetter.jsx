@@ -22,7 +22,7 @@ export default function ExperienceCertificate({ data = {} }) {
   const customTerms = data.custom_terms;
 
   return (
-    <div style={styles.outerWrapper}>
+    <div className="printable-letter-container" style={styles.outerWrapper}>
       <div style={styles.page}>
         <div style={styles.certificate}>
 
@@ -150,6 +150,7 @@ export default function ExperienceCertificate({ data = {} }) {
                   src="/logo.jpeg"
                   alt="Seal"
                   style={{ height: '32px', opacity: 0.2 }}
+                  onError={(e) => { e.target.src = '/parakshtech_logo.jpg'; }}
                 />
               </div>
               <div style={styles.signatureLine} />
