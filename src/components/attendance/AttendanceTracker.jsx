@@ -10,7 +10,8 @@ import {
   FaUserCheck, FaUserTimes, FaExclamationTriangle,
   FaSearch, FaChevronLeft, FaChevronRight, FaFileDownload,
   FaEye, FaBuilding, FaUserTie, FaHistory, FaCalendarDay,
-  FaBusinessTime, FaDoorOpen, FaCalendarAlt, FaMoneyBillWave
+  FaBusinessTime, FaDoorOpen, FaCalendarAlt, FaMoneyBillWave,
+  FaCamera, FaSearchPlus
 } from 'react-icons/fa';
 import {
   Chart as ChartJS,
@@ -29,6 +30,8 @@ import { useAuth } from '../../context/AuthContext';
 import AttendanceUploadModal from './AttendanceUploadModal';
 import PunchDetailsModal from './PunchDetailsModal';
 import EmployeeMonthlyModal from './EmployeeMonthlyModal';
+import CameraPunchModal from './CameraPunchModal';
+import AttendancePhotoModal from './AttendancePhotoModal';
 import './AttendanceTracker.css';
 
 // Register Chart.js components
@@ -86,6 +89,25 @@ const AttendanceTracker = () => {
   const [showPunchModal, setShowPunchModal] = useState(false);
   const [selectedMonthlyEmployee, setSelectedMonthlyEmployee] = useState(null);
   const [showMonthlyModal, setShowMonthlyModal] = useState(false);
+
+  // Camera Punch Verification & Photo Preview State
+  const [showCameraModal, setShowCameraModal] = useState(false);
+  const [cameraPunchType, setCameraPunchType] = useState('check-in'); // 'check-in' | 'check-out'
+  const [isCameraUpdate, setIsCameraUpdate] = useState(false);
+  const [punchSubmitting, setPunchSubmitting] = useState(false);
+  const [previewPhotoData, setPreviewPhotoData] = useState(null);
+
+  // Helper to resolve uploaded image paths
+  const getImageSrc = (src) => {
+    if (!src) return '';
+    if (src.startsWith('data:') || src.startsWith('http://') || src.startsWith('https://')) {
+      return src;
+    }
+    const origin = process.env.REACT_APP_API_URL 
+      ? process.env.REACT_APP_API_URL.replace('/api', '') 
+      : 'https://lms.parakshtech.com';
+    return `${origin}${src}`;
+  };
 
   // Self Attendance State (Employee View)
   const [selfYear, setSelfYear] = useState(new Date().getFullYear());
@@ -305,51 +327,55 @@ const AttendanceTracker = () => {
     document.body.removeChild(link);
   };
 
-  // Personal check-in / check-out with client's exact current time
-  const handleCheckIn = async (allowUpdate = false) => {
+  // Trigger camera modal for punch-in
+  const triggerPunchInModal = (allowUpdate = false) => {
+    setCameraPunchType('check-in');
+    setIsCameraUpdate(allowUpdate);
+    setShowCameraModal(true);
+  };
+
+  // Trigger camera modal for punch-out
+  const triggerPunchOutModal = (allowUpdate = false) => {
+    setCameraPunchType('check-out');
+    setIsCameraUpdate(allowUpdate);
+    setShowCameraModal(true);
+  };
+
+  // Personal check-in / check-out with client's exact current time and captured photo
+  const handleConfirmPunchWithPhoto = async (photoBase64, punchType, isUpdate = false) => {
     try {
-      setCheckingIn(true);
+      setPunchSubmitting(true);
       const now = new Date();
       const pad = (n) => String(n).padStart(2, '0');
       const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
       const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 
-      await api.post('/attendance/check-in', {
+      const endpoint = punchType === 'check-in' ? '/attendance/check-in' : '/attendance/check-out';
+      await api.post(endpoint, {
         time: timeStr,
         date: dateStr,
-        allowUpdate: !!allowUpdate
+        allowUpdate: !!isUpdate,
+        image: photoBase64
       });
+
+      setShowCameraModal(false);
       fetchSelfAttendance();
       fetchSelfMonthlyAttendance(selfYear, selfMonth, selfStatusFilter, selfDateSearch);
       if (isAdminOrHR) fetchDailyAttendance(selectedDate || dateStr);
     } catch (error) {
-      alert(error.response?.data?.message || 'Failed to check in');
+      alert(error.response?.data?.message || `Failed to ${punchType}`);
     } finally {
-      setCheckingIn(false);
+      setPunchSubmitting(false);
     }
   };
 
-  const handleCheckOut = async (allowUpdate = false) => {
-    try {
-      setCheckingOut(true);
-      const now = new Date();
-      const pad = (n) => String(n).padStart(2, '0');
-      const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-      const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  // Direct helper wrappers
+  const handleCheckIn = async (allowUpdate = false) => {
+    triggerPunchInModal(allowUpdate);
+  };
 
-      await api.post('/attendance/check-out', {
-        time: timeStr,
-        date: dateStr,
-        allowUpdate: !!allowUpdate
-      });
-      fetchSelfAttendance();
-      fetchSelfMonthlyAttendance(selfYear, selfMonth, selfStatusFilter, selfDateSearch);
-      if (isAdminOrHR) fetchDailyAttendance(selectedDate || dateStr);
-    } catch (error) {
-      alert(error.response?.data?.message || 'Failed to check out');
-    } finally {
-      setCheckingOut(false);
-    }
+  const handleCheckOut = async (allowUpdate = false) => {
+    triggerPunchOutModal(allowUpdate);
   };
 
   // Export Self Monthly Attendance to CSV
@@ -823,19 +849,46 @@ const AttendanceTracker = () => {
                           {/* Check-In */}
                           <td>
                             {record.is_present ? (
-                              <div>
-                                <div className="fw-semibold font-monospace">
-                                  {record.check_in_formatted}
-                                </div>
-                                {record.is_late ? (
-                                  <span className="badge-late d-inline-block mt-1">
-                                    ⚠️ Late by {Math.floor(record.late_minutes / 60) > 0 ? `${Math.floor(record.late_minutes / 60)}h ` : ''}{record.late_minutes % 60}m
-                                  </span>
-                                ) : (
-                                  <span className="badge-ontime d-inline-block mt-1">
-                                    ✓ On Time
-                                  </span>
+                              <div className="d-flex align-items-center gap-2">
+                                {record.check_in_image && (
+                                  <div 
+                                    className="rounded overflow-hidden shadow-sm border position-relative flex-shrink-0"
+                                    style={{ width: '34px', height: '34px', cursor: 'pointer', background: '#000' }}
+                                    onClick={() => setPreviewPhotoData({
+                                      image: record.check_in_image,
+                                      punchType: 'check-in',
+                                      employeeName: record.name,
+                                      jobNo: record.job_no,
+                                      date: record.date,
+                                      time: record.check_in_formatted
+                                    })}
+                                    title="Click to view check-in arrival photo"
+                                  >
+                                    <img 
+                                      src={getImageSrc(record.check_in_image)} 
+                                      alt="In Photo" 
+                                      className="w-100 h-100" 
+                                      style={{ objectFit: 'cover' }}
+                                    />
+                                    <div className="position-absolute bottom-0 end-0 bg-dark bg-opacity-75 text-white" style={{ fontSize: '7px', padding: '1px' }}>
+                                      <FaCamera />
+                                    </div>
+                                  </div>
                                 )}
+                                <div>
+                                  <div className="fw-semibold font-monospace">
+                                    {record.check_in_formatted}
+                                  </div>
+                                  {record.is_late ? (
+                                    <span className="badge-late d-inline-block mt-1">
+                                      ⚠️ Late by {Math.floor(record.late_minutes / 60) > 0 ? `${Math.floor(record.late_minutes / 60)}h ` : ''}{record.late_minutes % 60}m
+                                    </span>
+                                  ) : (
+                                    <span className="badge-ontime d-inline-block mt-1">
+                                      ✓ On Time
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             ) : (
                               <span className="text-muted small">--:-- (Absent)</span>
@@ -846,19 +899,46 @@ const AttendanceTracker = () => {
                           <td>
                             {record.is_present ? (
                               record.check_out ? (
-                                <div>
-                                  <div className="fw-semibold font-monospace">
-                                    {record.check_out_formatted}
-                                  </div>
-                                  {record.is_early_leave ? (
-                                    <span className="badge-early-leave d-inline-block mt-1">
-                                      ⏱ Left early by {Math.floor(record.early_leave_minutes / 60) > 0 ? `${Math.floor(record.early_leave_minutes / 60)}h ` : ''}{record.early_leave_minutes % 60}m
-                                    </span>
-                                  ) : (
-                                    <span className="badge-ontime d-inline-block mt-1">
-                                      ✓ Full Day (06:30+)
-                                    </span>
+                                <div className="d-flex align-items-center gap-2">
+                                  {record.check_out_image && (
+                                    <div 
+                                      className="rounded overflow-hidden shadow-sm border position-relative flex-shrink-0"
+                                      style={{ width: '34px', height: '34px', cursor: 'pointer', background: '#000' }}
+                                      onClick={() => setPreviewPhotoData({
+                                        image: record.check_out_image,
+                                        punchType: 'check-out',
+                                        employeeName: record.name,
+                                        jobNo: record.job_no,
+                                        date: record.date,
+                                        time: record.check_out_formatted
+                                      })}
+                                      title="Click to view check-out departure photo"
+                                    >
+                                      <img 
+                                        src={getImageSrc(record.check_out_image)} 
+                                        alt="Out Photo" 
+                                        className="w-100 h-100" 
+                                        style={{ objectFit: 'cover' }}
+                                      />
+                                      <div className="position-absolute bottom-0 end-0 bg-dark bg-opacity-75 text-white" style={{ fontSize: '7px', padding: '1px' }}>
+                                        <FaCamera />
+                                      </div>
+                                    </div>
                                   )}
+                                  <div>
+                                    <div className="fw-semibold font-monospace">
+                                      {record.check_out_formatted}
+                                    </div>
+                                    {record.is_early_leave ? (
+                                      <span className="badge-early-leave d-inline-block mt-1">
+                                        ⏱ Left early by {Math.floor(record.early_leave_minutes / 60) > 0 ? `${Math.floor(record.early_leave_minutes / 60)}h ` : ''}{record.early_leave_minutes % 60}m
+                                      </span>
+                                    ) : (
+                                      <span className="badge-ontime d-inline-block mt-1">
+                                        ✓ Full Day (06:30+)
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               ) : (
                                 <div>
@@ -970,25 +1050,62 @@ const AttendanceTracker = () => {
                           <FaClock size={40} className="text-success" />
                         </div>
                         <h4 className="fw-bold text-success mb-1">Checked In</h4>
-                        <p className="text-muted mb-3">
+                        <p className="text-muted mb-2">
                           First punch recorded at: <strong className="text-dark font-monospace fs-5">{myStats?.checkInTime}</strong>
                         </p>
+
+                        {/* Punch In Photo Thumbnail */}
+                        {myStats?.checkInImage && (
+                          <div className="d-flex align-items-center justify-content-center gap-2 mb-3">
+                            <div 
+                              className="rounded overflow-hidden shadow-sm border position-relative" 
+                              style={{ width: '60px', height: '60px', cursor: 'pointer', background: '#000' }}
+                              onClick={() => setPreviewPhotoData({
+                                image: myStats.checkInImage,
+                                punchType: 'check-in',
+                                employeeName: selfMonthlyData?.employee?.name || user?.employee?.first_name || 'Staff Member',
+                                jobNo: selfMonthlyData?.employee?.employee_id || user?.employee?.employee_id || '',
+                                date: currentTime.toLocaleDateString('en-GB'),
+                                time: myStats?.checkInTime
+                              })}
+                              title="Click to view arrival selfie"
+                            >
+                              <img 
+                                src={getImageSrc(myStats.checkInImage)} 
+                                alt="Check-in Photo" 
+                                className="w-100 h-100" 
+                                style={{ objectFit: 'cover' }} 
+                              />
+                              <div className="position-absolute bottom-0 end-0 bg-dark bg-opacity-75 text-white p-1" style={{ fontSize: '8px', lineHeight: 1 }}>
+                                <FaSearchPlus />
+                              </div>
+                            </div>
+                            <div className="text-start">
+                              <div className="small fw-semibold text-dark">Arrival Photo</div>
+                              <Badge bg="success" className="d-inline-flex align-items-center gap-1" style={{ fontSize: '10px' }}>
+                                <FaCamera size={9} /> Verified In
+                              </Badge>
+                            </div>
+                          </div>
+                        )}
+
                         <div className="d-flex flex-column align-items-center gap-2">
                           <Button 
                             variant="danger" 
-                            onClick={() => handleCheckOut(false)}
-                            disabled={checkingOut}
-                            className="px-4 py-2 shadow-sm fw-semibold"
+                            onClick={() => triggerPunchOutModal(false)}
+                            disabled={checkingOut || punchSubmitting}
+                            className="px-4 py-2 shadow-sm fw-semibold d-flex align-items-center gap-2"
                           >
-                            {checkingOut ? <><Spinner size="sm" className="me-2" />Recording Departure...</> : `Punch Check Out (${currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })})`}
+                            <FaCamera size={14} />
+                            <span>Punch Check Out ({currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })})</span>
                           </Button>
                           <Button
                             variant="link"
                             size="sm"
                             className="text-muted text-decoration-none p-0 mt-1"
-                            onClick={() => handleCheckIn(true)}
-                            disabled={checkingIn}
-                            title="Update check in punch to current time"
+                            onClick={() => triggerPunchInModal(true)}
+                            disabled={checkingIn || punchSubmitting}
+                            title="Update check in punch with new photo"
                           >
                             <small>↻ Update Check In to Current Time</small>
                           </Button>
@@ -1000,20 +1117,72 @@ const AttendanceTracker = () => {
                           <FaCheckCircle size={40} className="text-primary" />
                         </div>
                         <h4 className="fw-bold text-success mb-1">Attendance Completed</h4>
-                        <p className="text-muted mb-3">
+                        <p className="text-muted mb-2">
                           Checked out at: <strong className="text-dark font-monospace fs-5">{myStats?.checkOutTime}</strong>
                         </p>
+
+                        {/* Punch In and Punch Out Photos Side by Side */}
+                        <div className="d-flex align-items-center justify-content-center gap-3 mb-3">
+                          {myStats?.checkInImage && (
+                            <div 
+                              className="text-center"
+                              onClick={() => setPreviewPhotoData({
+                                image: myStats.checkInImage,
+                                punchType: 'check-in',
+                                employeeName: selfMonthlyData?.employee?.name || user?.employee?.first_name || 'Staff Member',
+                                jobNo: selfMonthlyData?.employee?.employee_id || user?.employee?.employee_id || '',
+                                date: currentTime.toLocaleDateString('en-GB'),
+                                time: myStats?.checkInTime
+                              })}
+                              style={{ cursor: 'pointer' }}
+                              title="Click to view arrival photo"
+                            >
+                              <div className="rounded overflow-hidden shadow-sm border mx-auto position-relative" style={{ width: '56px', height: '56px', background: '#000' }}>
+                                <img src={getImageSrc(myStats.checkInImage)} alt="In Photo" className="w-100 h-100" style={{ objectFit: 'cover' }} />
+                                <div className="position-absolute bottom-0 end-0 bg-dark bg-opacity-75 text-white p-1" style={{ fontSize: '8px', lineHeight: 1 }}>
+                                  <FaSearchPlus />
+                                </div>
+                              </div>
+                              <div className="text-muted mt-1 fw-semibold" style={{ fontSize: '10px' }}>Arrival Photo</div>
+                            </div>
+                          )}
+
+                          {myStats?.checkOutImage && (
+                            <div 
+                              className="text-center"
+                              onClick={() => setPreviewPhotoData({
+                                image: myStats.checkOutImage,
+                                punchType: 'check-out',
+                                employeeName: selfMonthlyData?.employee?.name || user?.employee?.first_name || 'Staff Member',
+                                jobNo: selfMonthlyData?.employee?.employee_id || user?.employee?.employee_id || '',
+                                date: currentTime.toLocaleDateString('en-GB'),
+                                time: myStats?.checkOutTime
+                              })}
+                              style={{ cursor: 'pointer' }}
+                              title="Click to view departure photo"
+                            >
+                              <div className="rounded overflow-hidden shadow-sm border mx-auto position-relative" style={{ width: '56px', height: '56px', background: '#000' }}>
+                                <img src={getImageSrc(myStats.checkOutImage)} alt="Out Photo" className="w-100 h-100" style={{ objectFit: 'cover' }} />
+                                <div className="position-absolute bottom-0 end-0 bg-dark bg-opacity-75 text-white p-1" style={{ fontSize: '8px', lineHeight: 1 }}>
+                                  <FaSearchPlus />
+                                </div>
+                              </div>
+                              <div className="text-muted mt-1 fw-semibold" style={{ fontSize: '10px' }}>Departure Photo</div>
+                            </div>
+                          )}
+                        </div>
+
                         <div className="d-flex flex-column align-items-center gap-2">
                           <Badge bg="success" className="py-2 px-3 fs-6">
-                            ✓ Today's punches recorded
+                            ✓ Today's punches recorded with photo
                           </Badge>
                           <Button
                             variant="link"
                             size="sm"
                             className="text-muted text-decoration-none p-0 mt-1"
-                            onClick={() => handleCheckOut(true)}
-                            disabled={checkingOut}
-                            title="Update check out punch to current time"
+                            onClick={() => triggerPunchOutModal(true)}
+                            disabled={checkingOut || punchSubmitting}
+                            title="Update check out punch with new photo"
                           >
                             <small>↻ Update Check Out to Current Time</small>
                           </Button>
@@ -1030,11 +1199,12 @@ const AttendanceTracker = () => {
                         </p>
                         <Button 
                           variant="primary" 
-                          onClick={() => handleCheckIn(false)}
-                          disabled={checkingIn}
-                          className="px-4 py-2 shadow-sm fw-semibold"
+                          onClick={() => triggerPunchInModal(false)}
+                          disabled={checkingIn || punchSubmitting}
+                          className="px-4 py-2 shadow-sm fw-semibold d-flex align-items-center gap-2 mx-auto"
                         >
-                          {checkingIn ? <><Spinner size="sm" className="me-2" />Recording Arrival...</> : `Punch Check In (${currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })})`}
+                          <FaCamera size={14} />
+                          <span>Punch Check In ({currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })})</span>
                         </Button>
                       </>
                     )}
@@ -1383,17 +1553,41 @@ const AttendanceTracker = () => {
                           {/* Check In */}
                           <td>
                             {day.is_present ? (
-                              <div>
-                                <span className="fw-bold font-monospace">{day.check_in_formatted}</span>
-                                {day.is_late ? (
-                                  <div className="mt-1">
-                                    <span className="badge-late">⚠️ Late ({day.late_minutes}m)</span>
-                                  </div>
-                                ) : (
-                                  <div className="mt-1">
-                                    <span className="badge-ontime">✓ On Time</span>
+                              <div className="d-flex align-items-center gap-2">
+                                {day.check_in_image && (
+                                  <div 
+                                    className="punch-photo-thumb-wrapper"
+                                    onClick={() => setPreviewPhotoData({
+                                      imageSrc: getImageSrc(day.check_in_image),
+                                      title: `Punch-In Photo - ${selfMonthlyData?.employee?.name || 'Me'}`,
+                                      employeeName: selfMonthlyData?.employee?.name || user?.name || 'Me',
+                                      jobNo: selfMonthlyData?.employee?.employee_id || user?.employee?.employee_id || '',
+                                      time: day.check_in_formatted,
+                                      date: day.date,
+                                      type: 'Check-In'
+                                    })}
+                                    title="Click to view full Check-In photo"
+                                  >
+                                    <img 
+                                      src={getImageSrc(day.check_in_image)} 
+                                      alt="In" 
+                                      className="punch-photo-thumb" 
+                                    />
+                                    <div className="punch-photo-badge in">IN</div>
                                   </div>
                                 )}
+                                <div>
+                                  <span className="fw-bold font-monospace">{day.check_in_formatted}</span>
+                                  {day.is_late ? (
+                                    <div className="mt-1">
+                                      <span className="badge-late">⚠️ Late ({day.late_minutes}m)</span>
+                                    </div>
+                                  ) : (
+                                    <div className="mt-1">
+                                      <span className="badge-ontime">✓ On Time</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             ) : (
                               <span className="text-muted small">--:--</span>
@@ -1404,17 +1598,41 @@ const AttendanceTracker = () => {
                           <td>
                             {day.is_present ? (
                               day.check_out ? (
-                                <div>
-                                  <span className="fw-bold font-monospace">{day.check_out_formatted}</span>
-                                  {day.is_early_leave ? (
-                                    <div className="mt-1">
-                                      <span className="badge-early-leave">⏱ Left early ({day.early_leave_minutes}m)</span>
-                                    </div>
-                                  ) : (
-                                    <div className="mt-1">
-                                      <span className="badge-ontime">✓ Full Day</span>
+                                <div className="d-flex align-items-center gap-2">
+                                  {day.check_out_image && (
+                                    <div 
+                                      className="punch-photo-thumb-wrapper"
+                                      onClick={() => setPreviewPhotoData({
+                                        imageSrc: getImageSrc(day.check_out_image),
+                                        title: `Punch-Out Photo - ${selfMonthlyData?.employee?.name || 'Me'}`,
+                                        employeeName: selfMonthlyData?.employee?.name || user?.name || 'Me',
+                                        jobNo: selfMonthlyData?.employee?.employee_id || user?.employee?.employee_id || '',
+                                        time: day.check_out_formatted,
+                                        date: day.date,
+                                        type: 'Check-Out'
+                                      })}
+                                      title="Click to view full Check-Out photo"
+                                    >
+                                      <img 
+                                        src={getImageSrc(day.check_out_image)} 
+                                        alt="Out" 
+                                        className="punch-photo-thumb" 
+                                      />
+                                      <div className="punch-photo-badge out">OUT</div>
                                     </div>
                                   )}
+                                  <div>
+                                    <span className="fw-bold font-monospace">{day.check_out_formatted}</span>
+                                    {day.is_early_leave ? (
+                                      <div className="mt-1">
+                                        <span className="badge-early-leave">⏱ Left early ({day.early_leave_minutes}m)</span>
+                                      </div>
+                                    ) : (
+                                      <div className="mt-1">
+                                        <span className="badge-ontime">✓ Full Day</span>
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               ) : (
                                 <div>
@@ -1517,7 +1735,29 @@ const AttendanceTracker = () => {
           setSelectedPunchRecord(punchRec);
           setShowPunchModal(true);
         }}
+        onViewPhoto={(photoData) => setPreviewPhotoData(photoData)}
       />
+
+      {/* Camera Punch Verification Modal */}
+      <CameraPunchModal
+        show={showCameraModal}
+        onHide={() => setShowCameraModal(false)}
+        punchType={cameraPunchType}
+        isUpdate={isCameraUpdate}
+        employeeName={selfMonthlyData?.employee?.name || `${user?.employee?.first_name || ''} ${user?.employee?.last_name || ''}`.trim() || user?.name || 'Staff Member'}
+        jobNo={selfMonthlyData?.employee?.employee_id || user?.employee?.employee_id || ''}
+        onConfirmPunch={handleConfirmPunchWithPhoto}
+        submitting={punchSubmitting}
+      />
+
+      {/* High-Resolution Attendance Photo Viewer Modal */}
+      {previewPhotoData && (
+        <AttendancePhotoModal
+          show={!!previewPhotoData}
+          onHide={() => setPreviewPhotoData(null)}
+          photoData={previewPhotoData}
+        />
+      )}
     </div>
   );
 };

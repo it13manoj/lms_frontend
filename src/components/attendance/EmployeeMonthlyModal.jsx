@@ -9,7 +9,7 @@ import {
   FaUserTimes, FaExclamationTriangle, FaDoorOpen, FaCheckCircle, 
   FaFileDownload, FaSearch, FaChevronLeft, FaChevronRight, 
   FaBusinessTime, FaEye, FaTimesCircle, FaBuilding, FaUserTie,
-  FaMoneyBillWave
+  FaMoneyBillWave, FaCamera
 } from 'react-icons/fa';
 import api from '../../services/api';
 
@@ -18,11 +18,22 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches }) => {
+const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches, onViewPhoto }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [attendanceData, setAttendanceData] = useState(null);
+
+  const getImageSrc = (src) => {
+    if (!src) return '';
+    if (src.startsWith('data:') || src.startsWith('http://') || src.startsWith('https://')) {
+      return src;
+    }
+    const origin = process.env.REACT_APP_API_URL 
+      ? process.env.REACT_APP_API_URL.replace('/api', '') 
+      : 'https://lms.parakshtech.com';
+    return `${origin}${src}`;
+  };
 
   // Filters
   const [selectedYear, setSelectedYear] = useState(2026);
@@ -493,21 +504,47 @@ const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches }) => {
                     {/* Check In */}
                     <td>
                       {day.is_present ? (
-                        <div>
-                          <span className="fw-bold font-monospace">{day.check_in_formatted}</span>
-                          {day.is_late ? (
-                            <div className="mt-1">
-                              <span className="badge-late">
-                                ⚠️ Late ({day.late_minutes}m)
-                              </span>
+                        <div className="d-flex align-items-center gap-2">
+                          {day.check_in_image && onViewPhoto ? (
+                            <div 
+                              className="punch-photo-thumb-wrapper"
+                              onClick={() => onViewPhoto({
+                                imageSrc: getImageSrc(day.check_in_image),
+                                title: `Punch-In Photo - ${attendanceData.employee?.name || employee?.name || 'Employee'}`,
+                                employeeName: attendanceData.employee?.name || employee?.name || 'Employee',
+                                jobNo: attendanceData.employee?.job_no || employee?.employee_id || '',
+                                time: day.check_in_formatted,
+                                date: day.date,
+                                type: 'Check-In'
+                              })}
+                              title="Click to view full Punch-In photo"
+                              style={{ cursor: 'pointer', position: 'relative', flexShrink: 0 }}
+                            >
+                              <img 
+                                src={getImageSrc(day.check_in_image)} 
+                                alt="In" 
+                                className="punch-photo-thumb"
+                                style={{ width: '38px', height: '38px', objectFit: 'cover', borderRadius: '8px', border: '1.5px solid #22c55e' }}
+                              />
+                              <span style={{ position: 'absolute', bottom: '-4px', right: '-4px', fontSize: '8px', fontWeight: 'bold', background: '#22c55e', color: '#fff', borderRadius: '4px', padding: '1px 3px' }}>IN</span>
                             </div>
-                          ) : (
-                            <div className="mt-1">
-                              <span className="badge-ontime">
-                                ✓ On Time
-                              </span>
-                            </div>
-                          )}
+                          ) : null}
+                          <div>
+                            <span className="fw-bold font-monospace">{day.check_in_formatted}</span>
+                            {day.is_late ? (
+                              <div className="mt-1">
+                                <span className="badge-late">
+                                  ⚠️ Late ({day.late_minutes}m)
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="mt-1">
+                                <span className="badge-ontime">
+                                  ✓ On Time
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       ) : (
                         <span className="text-muted small">--:--</span>
@@ -518,21 +555,47 @@ const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches }) => {
                     <td>
                       {day.is_present ? (
                         day.check_out ? (
-                          <div>
-                            <span className="fw-bold font-monospace">{day.check_out_formatted}</span>
-                            {day.is_early_leave ? (
-                              <div className="mt-1">
-                                <span className="badge-early-leave">
-                                  ⏱ Left early ({day.early_leave_minutes}m)
-                                </span>
-                              </div>
-                            ) : (
-                              <div className="mt-1">
-                                <span className="badge-ontime">
-                                  ✓ Full Day
-                                </span>
-                              </div>
-                            )}
+                          <div className="d-flex align-items-center gap-2">
+                            {day.check_out_image && onViewPhoto ? (
+                              <div 
+                                className="punch-photo-thumb-wrapper"
+                                onClick={() => onViewPhoto({
+                                  imageSrc: getImageSrc(day.check_out_image),
+                                  title: `Punch-Out Photo - ${attendanceData.employee?.name || employee?.name || 'Employee'}`,
+                                  employeeName: attendanceData.employee?.name || employee?.name || 'Employee',
+                                  jobNo: attendanceData.employee?.job_no || employee?.employee_id || '',
+                                  time: day.check_out_formatted,
+                                  date: day.date,
+                                  type: 'Check-Out'
+                                })}
+                                title="Click to view full Punch-Out photo"
+                                style={{ cursor: 'pointer', position: 'relative', flexShrink: 0 }}
+                              >
+                                <img 
+                                src={getImageSrc(day.check_out_image)} 
+                                alt="Out" 
+                                className="punch-photo-thumb"
+                                style={{ width: '38px', height: '38px', objectFit: 'cover', borderRadius: '8px', border: '1.5px solid #f97316' }}
+                              />
+                              <span style={{ position: 'absolute', bottom: '-4px', right: '-4px', fontSize: '8px', fontWeight: 'bold', background: '#f97316', color: '#fff', borderRadius: '4px', padding: '1px 3px' }}>OUT</span>
+                            </div>
+                            ) : null}
+                            <div>
+                              <span className="fw-bold font-monospace">{day.check_out_formatted}</span>
+                              {day.is_early_leave ? (
+                                <div className="mt-1">
+                                  <span className="badge-early-leave">
+                                    ⏱ Left early ({day.early_leave_minutes}m)
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="mt-1">
+                                  <span className="badge-ontime">
+                                    ✓ Full Day
+                                  </span>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         ) : (
                           <div>
