@@ -17,27 +17,24 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   const navigate = useNavigate();
   const [expandedMenus, setExpandedMenus] = useState({});
 
-const handleLogout = (e) => {
-  console.log("Hello");
-  
-  e.preventDefault();
+  const handleLogout = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (window.innerWidth <= 768 && typeof toggleSidebar === 'function') {
+      toggleSidebar();
+    }
     try {
-      console.log("1. Removing token...");
-      localStorage.removeItem('token');
-      
-      console.log("2. Clearing API headers...");
-      if (typeof api !== 'undefined' && api.defaults) {
-        delete api.defaults.headers.common['Authorization'];
-      }
-
-      console.log("3. Updating auth states...");
-      if (typeof setToken === 'function') setToken(null);
-      if (typeof setUser === 'function') setUser(null);
-
-      console.log("4. Navigating to login...");
+      logout();
       navigate('/login', { replace: true });
     } catch (error) {
-      console.error("CRASH DURING LOGOUT:", error);
+      console.error("Logout error:", error);
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
+  };
+
+  const handleNavClick = () => {
+    if (window.innerWidth <= 768 && typeof toggleSidebar === 'function') {
+      toggleSidebar();
     }
   };
 
@@ -428,6 +425,7 @@ const handleLogout = (e) => {
                       <NavLink
                         key={subItem.path}
                         to={subItem.path}
+                        onClick={handleNavClick}
                         className={({ isActive }) => 
                           `nav-subitem ${isActive ? 'active' : ''}`
                         }
@@ -447,6 +445,7 @@ const handleLogout = (e) => {
             <NavLink
               key={item.path}
               to={item.path}
+              onClick={handleNavClick}
               className={({ isActive }) => 
                 `nav-item ${isActive ? 'active' : ''}`
               }
@@ -456,6 +455,14 @@ const handleLogout = (e) => {
             </NavLink>
           );
         })}
+
+        {/* In-nav Mobile Logout (Guaranteed visible when scrolling through mobile menu) */}
+        <div className="sidebar-mobile-logout-item d-md-none">
+          <button onClick={handleLogout} className="logout-btn mobile-logout-btn">
+            <FaSignOutAlt />
+            <span>Logout</span>
+          </button>
+        </div>
       </nav>
 
       <div className="sidebar-footer">

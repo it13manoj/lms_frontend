@@ -10,6 +10,22 @@ const MainLayout = () => {
 
   return (
     <div className="main-layout">
+      {sidebarOpen && (
+        <div 
+          className="sidebar-mobile-backdrop d-md-none" 
+          onClick={() => setSidebarOpen(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.55)',
+            zIndex: 1040,
+            backdropFilter: 'blur(2px)'
+          }}
+        />
+      )}
       <Sidebar isOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
       <div className={`main-content ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
         <Header toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
