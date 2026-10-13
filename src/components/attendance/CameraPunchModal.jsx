@@ -3,8 +3,9 @@ import { Modal, Button, Badge, Alert, Spinner } from 'react-bootstrap';
 import { 
   FaCamera, FaRedo, FaCheckCircle, FaTimes, 
   FaUser, FaClock, FaExclamationTriangle, FaSync,
-  FaShieldAlt, FaUpload
+  FaShieldAlt, FaUpload, FaDesktop
 } from 'react-icons/fa';
+import { isMobileDevice } from '../../utils/deviceDetector';
 
 const CameraPunchModal = ({
   show,
@@ -218,8 +219,14 @@ const CameraPunchModal = ({
     reader.readAsDataURL(file);
   };
 
+  const isMobile = isMobileDevice();
+
   // Confirm punch with captured photo
   const handleConfirm = () => {
+    if (isMobile) {
+      alert('⚠️ Mobile Punch Restricted: Punch-in and Punch-out can only be performed from an office desktop or laptop computer.');
+      return;
+    }
     if (!capturedImage) return;
     onConfirmPunch(capturedImage, punchType, isUpdate);
   };
@@ -247,6 +254,19 @@ const CameraPunchModal = ({
       </Modal.Header>
 
       <Modal.Body className="p-3 text-center">
+        {/* Mobile Restriction Alert */}
+        {isMobile && (
+          <Alert variant="danger" className="text-start py-2 px-3 small mb-3 border-danger shadow-sm">
+            <div className="d-flex align-items-center gap-2 fw-bold text-danger mb-1">
+              <FaDesktop />
+              <span>Office System Required for Punch</span>
+            </div>
+            <div>
+              Attendance punches cannot be submitted from a mobile device. Please log in using an office desktop or laptop computer system to punch in/out.
+            </div>
+          </Alert>
+        )}
+
         {/* Verification Banner */}
         <div className="d-flex justify-content-between align-items-center bg-light p-2 rounded mb-3 small border">
           <div className="d-flex align-items-center gap-2 text-start">
@@ -425,7 +445,7 @@ const CameraPunchModal = ({
                 variant={isCheckIn ? 'success' : 'danger'} 
                 size="sm" 
                 onClick={handleConfirm}
-                disabled={submitting}
+                disabled={submitting || isMobile}
                 className="d-flex align-items-center gap-1 shadow-sm px-3"
               >
                 {submitting ? (
@@ -447,6 +467,7 @@ const CameraPunchModal = ({
                 variant="outline-secondary" 
                 size="sm" 
                 onClick={() => fileInputRef.current?.click()}
+                disabled={isMobile}
                 title="Upload image from file if camera has issues"
               >
                 <FaUpload size={12} className="me-1" />
@@ -456,7 +477,7 @@ const CameraPunchModal = ({
                 variant={isCheckIn ? 'success' : 'danger'} 
                 size="sm" 
                 onClick={handleCapturePhoto}
-                disabled={cameraLoading || !stream}
+                disabled={cameraLoading || !stream || isMobile}
                 className="d-flex align-items-center gap-1 shadow-sm px-3"
               >
                 <FaCamera size={13} />

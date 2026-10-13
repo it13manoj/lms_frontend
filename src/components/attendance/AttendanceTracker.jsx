@@ -11,7 +11,7 @@ import {
   FaSearch, FaChevronLeft, FaChevronRight, FaFileDownload,
   FaEye, FaBuilding, FaUserTie, FaHistory, FaCalendarDay,
   FaBusinessTime, FaDoorOpen, FaCalendarAlt, FaMoneyBillWave,
-  FaCamera, FaSearchPlus
+  FaCamera, FaSearchPlus, FaDesktop, FaMobileAlt
 } from 'react-icons/fa';
 import {
   Chart as ChartJS,
@@ -33,6 +33,7 @@ import EmployeeMonthlyModal from './EmployeeMonthlyModal';
 import CameraPunchModal from './CameraPunchModal';
 import AttendancePhotoModal from './AttendancePhotoModal';
 import { startSystemOffTracking, stopSystemOffTracking, useSystemOffTracker } from '../../services/systemOffTracker';
+import { isMobileDevice } from '../../utils/deviceDetector';
 import './AttendanceTracker.css';
 
 // Register Chart.js components
@@ -97,6 +98,15 @@ const AttendanceTracker = () => {
   const [isCameraUpdate, setIsCameraUpdate] = useState(false);
   const [punchSubmitting, setPunchSubmitting] = useState(false);
   const [previewPhotoData, setPreviewPhotoData] = useState(null);
+  const [isMobile, setIsMobile] = useState(isMobileDevice());
+
+  useEffect(() => {
+    const handleDeviceCheck = () => {
+      setIsMobile(isMobileDevice());
+    };
+    window.addEventListener('resize', handleDeviceCheck);
+    return () => window.removeEventListener('resize', handleDeviceCheck);
+  }, []);
 
   // Helper to resolve uploaded image paths
   const getImageSrc = (src) => {
@@ -356,6 +366,10 @@ const AttendanceTracker = () => {
 
   // Trigger camera modal for punch-in
   const triggerPunchInModal = (allowUpdate = false) => {
+    if (isMobile) {
+      alert('⚠️ Office Desktop/Laptop Required\n\nPunch-In is restricted on mobile devices. Attendance punches must be performed from an office desktop or laptop computer.');
+      return;
+    }
     setCameraPunchType('check-in');
     setIsCameraUpdate(allowUpdate);
     setShowCameraModal(true);
@@ -363,6 +377,10 @@ const AttendanceTracker = () => {
 
   // Trigger camera modal for punch-out
   const triggerPunchOutModal = (allowUpdate = false) => {
+    if (isMobile) {
+      alert('⚠️ Office Desktop/Laptop Required\n\nPunch-Out is restricted on mobile devices. Attendance punches must be performed from an office desktop or laptop computer.');
+      return;
+    }
     setCameraPunchType('check-out');
     setIsCameraUpdate(allowUpdate);
     setShowCameraModal(true);
@@ -370,6 +388,10 @@ const AttendanceTracker = () => {
 
   // Personal check-in / check-out with client's exact current time and captured photo
   const handleConfirmPunchWithPhoto = async (photoBase64, punchType, isUpdate = false) => {
+    if (isMobile) {
+      alert('⚠️ Mobile Punch Restricted: Punch-in and Punch-out can only be performed from an office desktop or laptop computer.');
+      return;
+    }
     try {
       setPunchSubmitting(true);
       const now = new Date();
@@ -382,7 +404,9 @@ const AttendanceTracker = () => {
         time: timeStr,
         date: dateStr,
         allowUpdate: !!isUpdate,
-        image: photoBase64
+        image: photoBase64,
+        isMobile: false,
+        deviceType: 'desktop'
       };
 
       if (punchType === 'check-out') {
@@ -1177,23 +1201,36 @@ const AttendanceTracker = () => {
                           </div>
                         </div>
 
+                        {isMobile && (
+                          <Alert variant="warning" className="d-flex align-items-center gap-2 py-2 px-3 mb-3 text-start border-warning shadow-sm mx-auto" style={{ maxWidth: '440px' }}>
+                            <FaDesktop className="fs-3 text-warning flex-shrink-0" />
+                            <div>
+                              <strong className="d-block text-dark">Office System Login Required</strong>
+                              <span className="text-muted small">
+                                Punch-Out is restricted on mobile devices. Please log in using an office desktop or laptop computer to punch out.
+                              </span>
+                            </div>
+                          </Alert>
+                        )}
+
                         <div className="d-flex flex-column align-items-center gap-2">
                           <Button 
-                            variant="danger" 
+                            variant={isMobile ? "secondary" : "danger"} 
                             onClick={() => triggerPunchOutModal(false)}
-                            disabled={checkingOut || punchSubmitting}
+                            disabled={checkingOut || punchSubmitting || isMobile}
                             className="px-4 py-2 shadow-sm fw-semibold d-flex align-items-center gap-2"
+                            title={isMobile ? "Punching is restricted on mobile devices. Please log in from a desktop or laptop system." : undefined}
                           >
-                            <FaCamera size={14} />
-                            <span>Punch Check Out ({currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })})</span>
+                            {isMobile ? <FaDesktop size={14} /> : <FaCamera size={14} />}
+                            <span>{isMobile ? 'Punch-Out Disabled on Mobile (Use PC)' : `Punch Check Out (${currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })})`}</span>
                           </Button>
                           <Button
                             variant="link"
                             size="sm"
                             className="text-muted text-decoration-none p-0 mt-1"
                             onClick={() => triggerPunchInModal(true)}
-                            disabled={checkingIn || punchSubmitting}
-                            title="Update check in punch with new photo"
+                            disabled={checkingIn || punchSubmitting || isMobile}
+                            title={isMobile ? "Restricted on mobile devices" : "Update check in punch with new photo"}
                           >
                             <small>↻ Update Check In to Current Time</small>
                           </Button>
@@ -1287,8 +1324,8 @@ const AttendanceTracker = () => {
                             size="sm"
                             className="text-muted text-decoration-none p-0 mt-1"
                             onClick={() => triggerPunchOutModal(true)}
-                            disabled={checkingOut || punchSubmitting}
-                            title="Update check out punch with new photo"
+                            disabled={checkingOut || punchSubmitting || isMobile}
+                            title={isMobile ? "Restricted on mobile devices" : "Update check out punch with new photo"}
                           >
                             <small>↻ Update Check Out to Current Time</small>
                           </Button>
@@ -1303,14 +1340,28 @@ const AttendanceTracker = () => {
                         <p className="text-muted mb-3">
                           Standard office timing: <strong>09:30 AM – 06:30 PM</strong>
                         </p>
+
+                        {isMobile && (
+                          <Alert variant="warning" className="d-flex align-items-center gap-2 py-2 px-3 mb-3 text-start border-warning shadow-sm mx-auto" style={{ maxWidth: '440px' }}>
+                            <FaDesktop className="fs-3 text-warning flex-shrink-0" />
+                            <div>
+                              <strong className="d-block text-dark">Office System Login Required</strong>
+                              <span className="text-muted small">
+                                Punch-In is restricted on mobile devices. Please log in using your office desktop or laptop computer to record attendance punches.
+                              </span>
+                            </div>
+                          </Alert>
+                        )}
+
                         <Button 
-                          variant="primary" 
+                          variant={isMobile ? "secondary" : "primary"} 
                           onClick={() => triggerPunchInModal(false)}
-                          disabled={checkingIn || punchSubmitting}
+                          disabled={checkingIn || punchSubmitting || isMobile}
                           className="px-4 py-2 shadow-sm fw-semibold d-flex align-items-center gap-2 mx-auto"
+                          title={isMobile ? "Punching is restricted on mobile devices. Please log in from a desktop or laptop system." : undefined}
                         >
-                          <FaCamera size={14} />
-                          <span>Punch Check In ({currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })})</span>
+                          {isMobile ? <FaDesktop size={14} /> : <FaCamera size={14} />}
+                          <span>{isMobile ? 'Punch-In Disabled on Mobile (Use PC)' : `Punch Check In (${currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })})`}</span>
                         </Button>
                       </>
                     )}

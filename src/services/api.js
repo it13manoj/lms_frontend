@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { isMobileDevice } from '../utils/deviceDetector';
 
 // Use environment variable or fallback to localhost
 const API_URL = process.env.REACT_APP_API_URL || 'https://lms.parakshtech.com/api';
@@ -11,13 +12,14 @@ const api = axios.create({
   timeout: 10000, // 10 second timeout
 });
 
-// Request interceptor to add token
+// Request interceptor to add token and device header
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    config.headers['x-device-type'] = isMobileDevice() ? 'mobile' : 'desktop';
     return config;
   },
   (error) => {
