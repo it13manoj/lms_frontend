@@ -410,7 +410,8 @@ const AttendanceTracker = () => {
       };
 
       if (punchType === 'check-out') {
-        payload.system_off_minutes = liveSystemOffMinutes;
+        const storedOff = parseInt(localStorage.getItem('ptk_att_off_minutes'), 10) || 0;
+        payload.system_off_minutes = Math.max(liveSystemOffMinutes || 0, storedOff);
       }
 
       await api.post(endpoint, payload);

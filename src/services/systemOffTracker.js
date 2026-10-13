@@ -13,14 +13,15 @@ const LOCAL_STORAGE_KEYS = {
 let swRegistration = null;
 let lastRecordedActivity = Date.now();
 let backgroundTimer = null;
+let heartbeatTimer = null;
 let lastSyncedOffMinutes = -1;
+let lastHeartbeatSent = 0;
 
 /**
  * Register Service Worker at root scope
  */
 export const registerAttendanceServiceWorker = async () => {
   if (!('serviceWorker' in navigator)) {
-    console.info('Service Worker not supported in this browser.');
     return null;
   }
 
@@ -37,13 +38,11 @@ export const registerAttendanceServiceWorker = async () => {
 
       if (data.type === 'USER_RETURNED_AFTER_IDLE') {
         const { idleMinutes, offMinutesAdded, totalOffMinutes } = data.payload || {};
-        // Notify window listeners
         window.dispatchEvent(
           new CustomEvent('ptk_user_returned_after_idle', {
             detail: { idleMinutes, offMinutesAdded, totalOffMinutes }
           })
         );
-        // Sync to backend immediately
         syncOffTimeToBackend(totalOffMinutes);
       } else if (data.type === 'SYSTEM_OFF_TICK') {
         window.dispatchEvent(
@@ -77,6 +76,63 @@ const postMessageToSW = (type, payload = {}) => {
 };
 
 /**
+ * Check if application was closed or system was asleep/away > 30 minutes.
+ * If away > 30 mins, adds (awayMinutes - 30) to system off time and syncs to backend.
+ */
+export const checkAppResumeAndCalculateOffTime = () => {
+  const isCheckedIn = localStorage.getItem(LOCAL_STORAGE_KEYS.CHECKED_IN) === 'true';
+  if (!isCheckedIn) return;
+
+  const now = Date.now();
+  const lastActStr = localStorage.getItem(LOCAL_STORAGE_KEYS.LAST_ACTIVITY);
+  if (!lastActStr) {
+    localStorage.setItem(LOCAL_STORAGE_KEYS.LAST_ACTIVITY, String(now));
+    return;
+  }
+
+  const lastAct = parseInt(lastActStr, 10);
+  const diffMs = now - lastAct;
+
+  // Check if system was off / app was closed for longer than 30-minute threshold
+  if (diffMs > IDLE_THRESHOLD_MS) {
+    const totalIdleMinutes = Math.floor(diffMs / 60000);
+    const extraOffMinutes = totalIdleMinutes - 30; // 30 mins grace
+    const currentTotalOff = parseInt(localStorage.getItem(LOCAL_STORAGE_KEYS.OFF_MINUTES), 10) || 0;
+    const newTotal = currentTotalOff + extraOffMinutes;
+
+    console.log(`[SystemOffTracker] App resumed after ${totalIdleMinutes}m closed/idle. Adding ${extraOffMinutes}m off time. Total: ${newTotal}m`);
+
+    localStorage.setItem(LOCAL_STORAGE_KEYS.OFF_MINUTES, String(newTotal));
+    localStorage.setItem(LOCAL_STORAGE_KEYS.LAST_ACTIVITY, String(now));
+    lastRecordedActivity = now;
+
+    // Immediately sync to server
+    syncOffTimeToBackend(newTotal);
+
+    // Notify UI (Widget toast & tracker)
+    window.dispatchEvent(
+      new CustomEvent('ptk_user_returned_after_idle', {
+        detail: {
+          idleMinutes: totalIdleMinutes,
+          offMinutesAdded: extraOffMinutes,
+          totalOffMinutes: newTotal
+        }
+      })
+    );
+
+    window.dispatchEvent(
+      new CustomEvent('ptk_system_off_synced', {
+        detail: { systemOffMinutes: newTotal }
+      })
+    );
+  } else {
+    // Within 30 min grace period, simply refresh activity
+    localStorage.setItem(LOCAL_STORAGE_KEYS.LAST_ACTIVITY, String(now));
+    lastRecordedActivity = now;
+  }
+};
+
+/**
  * Start tracking system off time (called on Check-In)
  */
 export const startSystemOffTracking = ({ date, checkInTime, initialOffMinutes = 0 }) => {
@@ -101,6 +157,7 @@ export const startSystemOffTracking = ({ date, checkInTime, initialOffMinutes = 
   });
 
   startClientTimer();
+  startHeartbeatTimer();
 };
 
 /**
@@ -113,6 +170,11 @@ export const stopSystemOffTracking = () => {
   if (backgroundTimer) {
     clearInterval(backgroundTimer);
     backgroundTimer = null;
+  }
+
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
   }
 
   postMessageToSW('STOP_TRACKING');
@@ -128,7 +190,7 @@ export const syncOffTimeToBackend = async (systemOffMinutes) => {
   const date = localStorage.getItem(LOCAL_STORAGE_KEYS.CHECK_IN_DATE) || new Date().toISOString().split('T')[0];
   const minutes = Math.max(0, parseInt(systemOffMinutes, 10) || 0);
 
-  // Avoid redundant network requests if unchanged
+  // Avoid duplicate network requests if unchanged
   if (minutes === lastSyncedOffMinutes) return;
 
   try {
@@ -139,7 +201,6 @@ export const syncOffTimeToBackend = async (systemOffMinutes) => {
     lastSyncedOffMinutes = minutes;
     localStorage.setItem(LOCAL_STORAGE_KEYS.OFF_MINUTES, String(minutes));
 
-    // Inform other components
     window.dispatchEvent(
       new CustomEvent('ptk_system_off_synced', {
         detail: { systemOffMinutes: minutes }
@@ -147,6 +208,29 @@ export const syncOffTimeToBackend = async (systemOffMinutes) => {
     );
   } catch (err) {
     console.warn('Failed to sync system off time to backend:', err.message);
+  }
+};
+
+/**
+ * Periodic Heartbeat to backend (keeps last_activity_time fresh while working)
+ */
+export const sendHeartbeatIfNeeded = async () => {
+  const isCheckedIn = localStorage.getItem(LOCAL_STORAGE_KEYS.CHECKED_IN) === 'true';
+  if (!isCheckedIn) return;
+
+  const now = Date.now();
+  if (now - lastHeartbeatSent < 50000) return; // once every ~50 seconds
+  lastHeartbeatSent = now;
+
+  try {
+    const currentOff = parseInt(localStorage.getItem(LOCAL_STORAGE_KEYS.OFF_MINUTES), 10) || 0;
+    const date = localStorage.getItem(LOCAL_STORAGE_KEYS.CHECK_IN_DATE) || new Date().toISOString().split('T')[0];
+    await api.post('/attendance/heartbeat', {
+      date,
+      system_off_minutes: currentOff
+    });
+  } catch (e) {
+    // Ignore heartbeat network drops
   }
 };
 
@@ -188,6 +272,9 @@ export const recordUserActivity = () => {
   lastRecordedActivity = now;
   localStorage.setItem(LOCAL_STORAGE_KEYS.LAST_ACTIVITY, String(now));
   postMessageToSW('RECORD_ACTIVITY', { timestamp: now });
+
+  // Send heartbeat if due
+  sendHeartbeatIfNeeded();
 };
 
 /**
@@ -210,8 +297,8 @@ const startClientTimer = () => {
       const baseOffMinutes = parseInt(localStorage.getItem(LOCAL_STORAGE_KEYS.OFF_MINUTES), 10) || 0;
       const currentTotalOffMinutes = baseOffMinutes + currentSessionOffMinutes;
 
-      // Periodically sync every 2 minutes while idle
-      if (currentTotalOffMinutes > lastSyncedOffMinutes && (idleMs % 120000 < 15000)) {
+      // Periodically sync every 60 seconds while idle
+      if (currentTotalOffMinutes > lastSyncedOffMinutes && (idleMs % 60000 < 12000)) {
         syncOffTimeToBackend(currentTotalOffMinutes);
       }
 
@@ -229,6 +316,16 @@ const startClientTimer = () => {
   }, 10000);
 };
 
+/**
+ * Heartbeat Timer: sends active heartbeat every 60s
+ */
+const startHeartbeatTimer = () => {
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  heartbeatTimer = setInterval(() => {
+    sendHeartbeatIfNeeded();
+  }, 60000);
+};
+
 // Global Activity Event Listeners
 if (typeof window !== 'undefined') {
   const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'visibilitychange'];
@@ -236,8 +333,30 @@ if (typeof window !== 'undefined') {
     window.addEventListener(evt, recordUserActivity, { passive: true });
   });
 
-  // Re-check on tab focus
-  window.addEventListener('focus', recordUserActivity);
+  // Re-check on tab focus / window focus / page resume
+  window.addEventListener('focus', () => {
+    checkAppResumeAndCalculateOffTime();
+    recordUserActivity();
+  });
+
+  window.addEventListener('pageshow', () => {
+    checkAppResumeAndCalculateOffTime();
+  });
+
+  // Save exact timestamp on page close / tab close / beforeunload
+  window.addEventListener('beforeunload', () => {
+    const isCheckedIn = localStorage.getItem(LOCAL_STORAGE_KEYS.CHECKED_IN) === 'true';
+    if (isCheckedIn) {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.LAST_ACTIVITY, String(Date.now()));
+    }
+  });
+
+  window.addEventListener('pagehide', () => {
+    const isCheckedIn = localStorage.getItem(LOCAL_STORAGE_KEYS.CHECKED_IN) === 'true';
+    if (isCheckedIn) {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.LAST_ACTIVITY, String(Date.now()));
+    }
+  });
 }
 
 /**
@@ -251,12 +370,19 @@ export const useSystemOffTracker = (initialStats) => {
   });
 
   const [systemOffMinutes, setSystemOffMinutes] = useState(() => {
-    return initialStats?.systemOffMinutes || parseInt(localStorage.getItem(LOCAL_STORAGE_KEYS.OFF_MINUTES), 10) || 0;
+    const stored = parseInt(localStorage.getItem(LOCAL_STORAGE_KEYS.OFF_MINUTES), 10) || 0;
+    const serverOff = initialStats?.systemOffMinutes || 0;
+    return Math.max(stored, serverOff);
   });
 
   const [idleSeconds, setIdleSeconds] = useState(0);
   const [isIdleOver30Min, setIsIdleOver30Min] = useState(false);
   const [returnNotification, setReturnNotification] = useState(null);
+
+  // Run app resume calculation on hook mount
+  useEffect(() => {
+    checkAppResumeAndCalculateOffTime();
+  }, []);
 
   // Sync with initialStats whenever fetched from API
   useEffect(() => {
@@ -264,11 +390,20 @@ export const useSystemOffTracker = (initialStats) => {
       if (initialStats.todayStatus === 'checked-in') {
         setIsCheckedIn(true);
         localStorage.setItem(LOCAL_STORAGE_KEYS.CHECKED_IN, 'true');
-        if (typeof initialStats.systemOffMinutes === 'number') {
-          setSystemOffMinutes(initialStats.systemOffMinutes);
-          localStorage.setItem(LOCAL_STORAGE_KEYS.OFF_MINUTES, String(initialStats.systemOffMinutes));
+
+        const serverOff = typeof initialStats.systemOffMinutes === 'number' ? initialStats.systemOffMinutes : 0;
+        const clientOff = parseInt(localStorage.getItem(LOCAL_STORAGE_KEYS.OFF_MINUTES), 10) || 0;
+        const maxOff = Math.max(serverOff, clientOff);
+
+        setSystemOffMinutes(maxOff);
+        localStorage.setItem(LOCAL_STORAGE_KEYS.OFF_MINUTES, String(maxOff));
+
+        if (clientOff > serverOff) {
+          syncOffTimeToBackend(clientOff);
         }
+
         startClientTimer();
+        startHeartbeatTimer();
       } else if (initialStats.todayStatus === 'checked-out') {
         setIsCheckedIn(false);
         stopSystemOffTracking();
@@ -296,11 +431,15 @@ export const useSystemOffTracker = (initialStats) => {
     };
 
     const handleReturn = (e) => {
-      const { idleMinutes, offMinutesAdded } = e.detail || {};
+      const { idleMinutes, offMinutesAdded, totalOffMinutes } = e.detail || {};
       if (offMinutesAdded > 0) {
+        if (typeof totalOffMinutes === 'number') {
+          setSystemOffMinutes(totalOffMinutes);
+        }
         setReturnNotification({
           idleMinutes,
           offMinutesAdded,
+          totalOffMinutes,
           timestamp: Date.now()
         });
       }
@@ -357,4 +496,3 @@ export const useSystemOffTracker = (initialStats) => {
     dismissNotification: () => setReturnNotification(null)
   };
 };
-

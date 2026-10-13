@@ -5,7 +5,7 @@
  * If employee is inactive for > 30 minutes, System Off Time begins accumulating.
  */
 
-const SW_VERSION = 'ptk-sw-attendance-v1.0';
+const SW_VERSION = 'ptk-sw-attendance-v1.1';
 const IDLE_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes (1800,000 ms)
 
 let trackerState = {
@@ -18,13 +18,70 @@ let trackerState = {
   employeeId: null
 };
 
+// IndexedDB Helper to persist state across Service Worker terminations
+const DB_NAME = 'ptk_attendance_db';
+const STORE_NAME = 'tracker_state';
+
+const openDB = () => {
+  return new Promise((resolve) => {
+    if (!('indexedDB' in self)) return resolve(null);
+    try {
+      const request = indexedDB.open(DB_NAME, 1);
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME);
+        }
+      };
+      request.onsuccess = (e) => resolve(e.target.result);
+      request.onerror = () => resolve(null);
+    } catch (e) {
+      resolve(null);
+    }
+  });
+};
+
+const saveStateToDB = async (state) => {
+  const db = await openDB();
+  if (!db) return;
+  try {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put(state, 'current_state');
+  } catch (e) {
+    // Ignore DB save errors
+  }
+};
+
+const loadStateFromDB = async () => {
+  const db = await openDB();
+  if (!db) return null;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const req = tx.objectStore(STORE_NAME).get('current_state');
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    } catch (e) {
+      resolve(null);
+    }
+  });
+};
+
 // Lifecycle: Install & Activate immediately
 self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    (async () => {
+      const saved = await loadStateFromDB();
+      if (saved) {
+        trackerState = { ...trackerState, ...saved };
+      }
+      return self.clients.claim();
+    })()
+  );
 });
 
 // Broadcast helper to notify all active windows/tabs
@@ -80,7 +137,7 @@ setInterval(() => {
 }, 15000);
 
 // Client Message Listener
-self.addEventListener('message', (event) => {
+self.addEventListener('message', async (event) => {
   const { type, payload } = event.data || {};
 
   switch (type) {
@@ -92,6 +149,8 @@ self.addEventListener('message', (event) => {
       trackerState.accumulatedOffSeconds = (payload?.initialOffMinutes || 0) * 60;
       trackerState.currentIdleSessionOffSeconds = 0;
       trackerState.employeeId = payload?.employeeId || null;
+
+      await saveStateToDB(trackerState);
 
       broadcastMessage('TRACKING_STARTED', {
         checkInDate: trackerState.checkInDate,
@@ -123,6 +182,7 @@ self.addEventListener('message', (event) => {
       }
 
       trackerState.lastActivityTimestamp = now;
+      await saveStateToDB(trackerState);
       break;
     }
 
@@ -130,6 +190,7 @@ self.addEventListener('message', (event) => {
       if (typeof payload?.systemOffMinutes === 'number') {
         trackerState.accumulatedOffSeconds = payload.systemOffMinutes * 60;
         trackerState.currentIdleSessionOffSeconds = 0;
+        await saveStateToDB(trackerState);
       }
       break;
     }
@@ -137,6 +198,7 @@ self.addEventListener('message', (event) => {
     case 'STOP_TRACKING': {
       trackerState.isTracking = false;
       trackerState.currentIdleSessionOffSeconds = 0;
+      await saveStateToDB(trackerState);
       broadcastMessage('TRACKING_STOPPED', {
         totalOffMinutes: Math.floor(trackerState.accumulatedOffSeconds / 60)
       });
@@ -171,4 +233,3 @@ self.addEventListener('message', (event) => {
       break;
   }
 });
-
