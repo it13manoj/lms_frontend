@@ -288,10 +288,38 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
     const socket = io(socketUrl, {
       path: '/socket.io',
       transports: ['websocket', 'polling'],
-      reconnectionAttempts: 5,
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
       timeout: 10000
     });
     socketRef.current = socket;
+
+    // Helper to emit join-meeting with latest state
+    const emitJoinMeeting = () => {
+      if (!isMounted) return;
+      console.log(`[MeetingRoom] Emitting join-meeting for ${selfNameRef.current} (${meetingId})`);
+      socket.emit('join-meeting', {
+        meetingId,
+        user: {
+          id: user?.id || (isGuest ? 'guest-' + Date.now() : 'user-' + Date.now()),
+          name: selfNameRef.current,
+          role: selfRoleRef.current,
+          isMicOn: isMicOnRef.current,
+          isCameraOn: isCameraOnRef.current,
+          avatarBg: '#3b82f6'
+        }
+      });
+    };
+
+    socket.on('connect', () => {
+      console.log(`[MeetingRoom] Connected to signaling server: ${socket.id}`);
+      emitJoinMeeting();
+    });
+
+    socket.on('connect_error', (err) => {
+      console.warn('[MeetingRoom] Signaling server connection notice:', err?.message || err);
+    });
 
     // Flush queued ICE candidates once remote description is set
     const flushCandidates = async (targetId, pc) => {
@@ -320,25 +348,24 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
       console.log(`[WebRTC] Creating RTCPeerConnection for: ${targetSocketId}`);
       const pc = new RTCPeerConnection({
         iceServers: [
+          // Public Ultra-Fast STUN Servers
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun.cloudflare.com:3478' },
           // Dedicated Production LMS TURN / STUN Servers (Contabo VPS 173.212.235.87)
-          { urls: 'stun:lms.parakshtech.com:3478' },
           { urls: 'stun:173.212.235.87:3478' },
+          { urls: 'stun:lms.parakshtech.com:3478' },
           {
             urls: [
-              'turn:lms.parakshtech.com:3478?transport=udp',
-              'turn:lms.parakshtech.com:3478?transport=tcp',
               'turn:173.212.235.87:3478?transport=udp',
               'turn:173.212.235.87:3478?transport=tcp',
+              'turn:lms.parakshtech.com:3478?transport=udp',
+              'turn:lms.parakshtech.com:3478?transport=tcp',
               'turns:lms.parakshtech.com:5349?transport=tcp'
             ],
             username: 'paraksh',
             credential: 'LmsMeeting2026Turn!'
-          },
-          // Global Fallback Public STUN Servers
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' },
-          { urls: 'stun:stun.cloudflare.com:3478' }
+          }
         ],
         iceCandidatePoolSize: 10
       });
@@ -455,17 +482,7 @@ const MeetingRoom = ({ meetingData: initialMeeting, onLeave, isGuest = false, gu
       if (!isMounted) return;
 
       // Join room once local media is initialized
-      socket.emit('join-meeting', {
-        meetingId,
-        user: {
-          id: user?.id || (isGuest ? 'guest-' + Date.now() : 'user-' + Date.now()),
-          name: selfNameRef.current,
-          role: selfRoleRef.current,
-          isMicOn: isMicOnRef.current,
-          isCameraOn: isCameraOnRef.current,
-          avatarBg: '#3b82f6'
-        }
-      });
+      emitJoinMeeting();
     };
 
     initAndJoin();

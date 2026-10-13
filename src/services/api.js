@@ -36,8 +36,13 @@ api.interceptors.response.use(
       if (error.response.status === 401) {
         localStorage.removeItem('token');
         delete api.defaults.headers.common['Authorization'];
-        // Only redirect if not on login page
-        if (!window.location.pathname.includes('/login')) {
+        // Only redirect to login if not already on login or guest/meeting pages
+        const currentPath = window.location.pathname;
+        const isMeetingOrGuest = currentPath.includes('/login') || 
+                                 currentPath.includes('/guest') || 
+                                 currentPath.startsWith('/meeting') || 
+                                 currentPath.startsWith('/meet');
+        if (!isMeetingOrGuest) {
           window.location.href = '/login';
         }
       }

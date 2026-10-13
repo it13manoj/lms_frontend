@@ -5,7 +5,7 @@ import Header from './Header';
 import { Container, Row, Col } from 'react-bootstrap';
 import SystemOffTrackerWidget from '../attendance/SystemOffTrackerWidget';
 
-const MainLayout = () => {
+const MainLayout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
@@ -30,7 +30,7 @@ const MainLayout = () => {
       <div className={`main-content ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
         <Header toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
         <Container fluid className="content-wrapper">
-          <Outlet />
+          {children || <Outlet />}
         </Container>
       </div>
       <SystemOffTrackerWidget />

@@ -34,6 +34,7 @@ import Performance from './components/performance/Performance';
 import PerformanceReview from './components/performance/PerformanceReview';
 import MeetingPanel from './components/meetings/MeetingPanel';
 import GuestMeetingJoin from './components/meetings/GuestMeetingJoin';
+import MeetingDispatcher from './components/meetings/MeetingDispatcher';
 import LetterList from './components/letter/LetterList';
 
 function App() {
@@ -43,9 +44,13 @@ function App() {
         <ToastContainer />
         <Routes>
           <Route path="/login" element={<Login />} />
-          {/* Public Guest Meeting Routes (No employee login required) */}
+          {/* Universal Meeting Links (Both logged-in employees and external guests) */}
+          <Route path="/meetings/:meetingId" element={<MeetingDispatcher />} />
+          <Route path="/meeting/:meetingId" element={<MeetingDispatcher />} />
+          <Route path="/meet/:meetingId" element={<MeetingDispatcher />} />
           <Route path="/meeting/guest/:meetingId" element={<GuestMeetingJoin />} />
           <Route path="/meetings/guest/:meetingId" element={<GuestMeetingJoin />} />
+          <Route path="/meet/guest/:meetingId" element={<GuestMeetingJoin />} />
           <Route path="/" element={<ProtectedRoute />}>
             <Route element={<MainLayout />}>
               <Route index element={<Navigate to="/dashboard" replace />} />
