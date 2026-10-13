@@ -12,13 +12,27 @@ const PunchDetailsModal = ({ show, onHide, record }) => {
 
   const getImageSrc = (src) => {
     if (!src) return '';
-    if (src.startsWith('data:') || src.startsWith('http://') || src.startsWith('https://')) {
+    if (src.startsWith('data:')) return src;
+    if (src.startsWith('http://') || src.startsWith('https://')) {
       return src;
     }
     const origin = process.env.REACT_APP_API_URL 
-      ? process.env.REACT_APP_API_URL.replace('/api', '') 
+      ? process.env.REACT_APP_API_URL.replace(/\/api\/?$/, '') 
       : 'https://lms.parakshtech.com';
-    return `${origin}${src}`;
+    const cleanPath = src.startsWith('/') ? src : `/${src}`;
+    return `${origin}${cleanPath}`;
+  };
+
+  const handleImageError = (e) => {
+    if (!e?.target?.src) return;
+    const currentSrc = e.target.src;
+    if (!e.target.dataset.triedFallback && currentSrc.includes('/uploads/') && !currentSrc.includes('/api/uploads/')) {
+      e.target.dataset.triedFallback = 'true';
+      e.target.src = currentSrc.replace('/uploads/', '/api/uploads/');
+    } else if (!e.target.dataset.triedDirectFallback && currentSrc.includes('/api/uploads/')) {
+      e.target.dataset.triedDirectFallback = 'true';
+      e.target.src = currentSrc.replace('/api/uploads/', '/uploads/');
+    }
   };
 
   const handleOpenPhoto = (image, punchType, time) => {
@@ -79,6 +93,7 @@ const PunchDetailsModal = ({ show, onHide, record }) => {
                         alt="Check-in" 
                         className="w-100 h-100" 
                         style={{ objectFit: 'cover' }}
+                        onError={handleImageError}
                       />
                       <div className="position-absolute bottom-0 end-0 bg-dark bg-opacity-75 text-white p-1 rounded-top-start" style={{ fontSize: '9px' }}>
                         <FaSearchPlus />
@@ -125,6 +140,7 @@ const PunchDetailsModal = ({ show, onHide, record }) => {
                         alt="Check-out" 
                         className="w-100 h-100" 
                         style={{ objectFit: 'cover' }}
+                        onError={handleImageError}
                       />
                       <div className="position-absolute bottom-0 end-0 bg-dark bg-opacity-75 text-white p-1 rounded-top-start" style={{ fontSize: '9px' }}>
                         <FaSearchPlus />

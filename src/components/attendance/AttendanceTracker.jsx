@@ -101,13 +101,31 @@ const AttendanceTracker = () => {
   // Helper to resolve uploaded image paths
   const getImageSrc = (src) => {
     if (!src) return '';
-    if (src.startsWith('data:') || src.startsWith('http://') || src.startsWith('https://')) {
+    if (src.startsWith('data:')) return src;
+
+    const origin = process.env.REACT_APP_API_URL 
+      ? process.env.REACT_APP_API_URL.replace(/\/api\/?$/, '') 
+      : 'https://lms.parakshtech.com';
+
+    if (src.startsWith('http://') || src.startsWith('https://')) {
       return src;
     }
-    const origin = process.env.REACT_APP_API_URL 
-      ? process.env.REACT_APP_API_URL.replace('/api', '') 
-      : 'https://lms.parakshtech.com';
-    return `${origin}${src}`;
+
+    const cleanPath = src.startsWith('/') ? src : `/${src}`;
+    return `${origin}${cleanPath}`;
+  };
+
+  // Image error fallback helper
+  const handleImageError = (e) => {
+    if (!e?.target?.src) return;
+    const currentSrc = e.target.src;
+    if (!e.target.dataset.triedFallback && currentSrc.includes('/uploads/') && !currentSrc.includes('/api/uploads/')) {
+      e.target.dataset.triedFallback = 'true';
+      e.target.src = currentSrc.replace('/uploads/', '/api/uploads/');
+    } else if (!e.target.dataset.triedDirectFallback && currentSrc.includes('/api/uploads/')) {
+      e.target.dataset.triedDirectFallback = 'true';
+      e.target.src = currentSrc.replace('/api/uploads/', '/uploads/');
+    }
   };
 
   // Self Attendance State (Employee View)
@@ -890,6 +908,7 @@ const AttendanceTracker = () => {
                                       alt="In Photo" 
                                       className="w-100 h-100" 
                                       style={{ objectFit: 'cover' }}
+                                      onError={handleImageError}
                                     />
                                     <div className="position-absolute bottom-0 end-0 bg-dark bg-opacity-75 text-white" style={{ fontSize: '7px', padding: '1px' }}>
                                       <FaCamera />
@@ -940,6 +959,7 @@ const AttendanceTracker = () => {
                                         alt="Out Photo" 
                                         className="w-100 h-100" 
                                         style={{ objectFit: 'cover' }}
+                                        onError={handleImageError}
                                       />
                                       <div className="position-absolute bottom-0 end-0 bg-dark bg-opacity-75 text-white" style={{ fontSize: '7px', padding: '1px' }}>
                                         <FaCamera />
@@ -1106,6 +1126,7 @@ const AttendanceTracker = () => {
                                 alt="Check-in Photo" 
                                 className="w-100 h-100" 
                                 style={{ objectFit: 'cover' }} 
+                                onError={handleImageError}
                               />
                               <div className="position-absolute bottom-0 end-0 bg-dark bg-opacity-75 text-white p-1" style={{ fontSize: '8px', lineHeight: 1 }}>
                                 <FaSearchPlus />
@@ -1223,7 +1244,7 @@ const AttendanceTracker = () => {
                               title="Click to view arrival photo"
                             >
                               <div className="rounded overflow-hidden shadow-sm border mx-auto position-relative" style={{ width: '56px', height: '56px', background: '#000' }}>
-                                <img src={getImageSrc(myStats.checkInImage)} alt="In Photo" className="w-100 h-100" style={{ objectFit: 'cover' }} />
+                                <img src={getImageSrc(myStats.checkInImage)} alt="In Photo" className="w-100 h-100" style={{ objectFit: 'cover' }} onError={handleImageError} />
                                 <div className="position-absolute bottom-0 end-0 bg-dark bg-opacity-75 text-white p-1" style={{ fontSize: '8px', lineHeight: 1 }}>
                                   <FaSearchPlus />
                                 </div>
@@ -1247,7 +1268,7 @@ const AttendanceTracker = () => {
                               title="Click to view departure photo"
                             >
                               <div className="rounded overflow-hidden shadow-sm border mx-auto position-relative" style={{ width: '56px', height: '56px', background: '#000' }}>
-                                <img src={getImageSrc(myStats.checkOutImage)} alt="Out Photo" className="w-100 h-100" style={{ objectFit: 'cover' }} />
+                                <img src={getImageSrc(myStats.checkOutImage)} alt="Out Photo" className="w-100 h-100" style={{ objectFit: 'cover' }} onError={handleImageError} />
                                 <div className="position-absolute bottom-0 end-0 bg-dark bg-opacity-75 text-white p-1" style={{ fontSize: '8px', lineHeight: 1 }}>
                                   <FaSearchPlus />
                                 </div>
@@ -1657,6 +1678,7 @@ const AttendanceTracker = () => {
                                       src={getImageSrc(day.check_in_image)} 
                                       alt="In" 
                                       className="punch-photo-thumb" 
+                                      onError={handleImageError}
                                     />
                                     <div className="punch-photo-badge in">IN</div>
                                   </div>
@@ -1702,6 +1724,7 @@ const AttendanceTracker = () => {
                                         src={getImageSrc(day.check_out_image)} 
                                         alt="Out" 
                                         className="punch-photo-thumb" 
+                                        onError={handleImageError}
                                       />
                                       <div className="punch-photo-badge out">OUT</div>
                                     </div>

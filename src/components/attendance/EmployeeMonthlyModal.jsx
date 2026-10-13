@@ -26,13 +26,27 @@ const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches, onViewPho
 
   const getImageSrc = (src) => {
     if (!src) return '';
-    if (src.startsWith('data:') || src.startsWith('http://') || src.startsWith('https://')) {
+    if (src.startsWith('data:')) return src;
+    if (src.startsWith('http://') || src.startsWith('https://')) {
       return src;
     }
     const origin = process.env.REACT_APP_API_URL 
-      ? process.env.REACT_APP_API_URL.replace('/api', '') 
+      ? process.env.REACT_APP_API_URL.replace(/\/api\/?$/, '') 
       : 'https://lms.parakshtech.com';
-    return `${origin}${src}`;
+    const cleanPath = src.startsWith('/') ? src : `/${src}`;
+    return `${origin}${cleanPath}`;
+  };
+
+  const handleImageError = (e) => {
+    if (!e?.target?.src) return;
+    const currentSrc = e.target.src;
+    if (!e.target.dataset.triedFallback && currentSrc.includes('/uploads/') && !currentSrc.includes('/api/uploads/')) {
+      e.target.dataset.triedFallback = 'true';
+      e.target.src = currentSrc.replace('/uploads/', '/api/uploads/');
+    } else if (!e.target.dataset.triedDirectFallback && currentSrc.includes('/api/uploads/')) {
+      e.target.dataset.triedDirectFallback = 'true';
+      e.target.src = currentSrc.replace('/api/uploads/', '/uploads/');
+    }
   };
 
   // Filters
@@ -523,8 +537,9 @@ const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches, onViewPho
                               <img 
                                 src={getImageSrc(day.check_in_image)} 
                                 alt="In" 
-                                className="punch-photo-thumb"
+                                className="punch-photo-thumb" 
                                 style={{ width: '38px', height: '38px', objectFit: 'cover', borderRadius: '8px', border: '1.5px solid #22c55e' }}
+                                onError={handleImageError}
                               />
                               <span style={{ position: 'absolute', bottom: '-4px', right: '-4px', fontSize: '8px', fontWeight: 'bold', background: '#22c55e', color: '#fff', borderRadius: '4px', padding: '1px 3px' }}>IN</span>
                             </div>
@@ -574,8 +589,9 @@ const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches, onViewPho
                                 <img 
                                 src={getImageSrc(day.check_out_image)} 
                                 alt="Out" 
-                                className="punch-photo-thumb"
+                                className="punch-photo-thumb" 
                                 style={{ width: '38px', height: '38px', objectFit: 'cover', borderRadius: '8px', border: '1.5px solid #f97316' }}
+                                onError={handleImageError}
                               />
                               <span style={{ position: 'absolute', bottom: '-4px', right: '-4px', fontSize: '8px', fontWeight: 'bold', background: '#f97316', color: '#fff', borderRadius: '4px', padding: '1px 3px' }}>OUT</span>
                             </div>
