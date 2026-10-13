@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { Container, Row, Col } from 'react-bootstrap';
+import SystemOffTrackerWidget from '../attendance/SystemOffTrackerWidget';
 
 const MainLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -16,6 +17,7 @@ const MainLayout = () => {
           <Outlet />
         </Container>
       </div>
+      <SystemOffTrackerWidget />
     </div>
   );
 };

@@ -618,6 +618,16 @@ const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches, onViewPho
                             <FaClock size={10} className="text-primary" />
                             <span>{day.working_hours_formatted}</span>
                           </span>
+                          {day.system_off_minutes > 0 && (
+                            <div className="mt-1" style={{ fontSize: '10px' }}>
+                              <span className="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle py-0 px-1">
+                                Off: {day.system_off_formatted || `${day.system_off_minutes}m`}
+                              </span>
+                              <div className="text-muted" style={{ fontSize: '9px' }}>
+                                Net: <strong className="text-success">{day.net_working_hours}h</strong>
+                              </div>
+                            </div>
+                          )}
                           <div className="mt-1" style={{ maxWidth: '90px' }}>
                             <ProgressBar 
                               now={Math.min(100, (day.working_hours / 9) * 100)} 

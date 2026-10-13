@@ -32,6 +32,7 @@ import PunchDetailsModal from './PunchDetailsModal';
 import EmployeeMonthlyModal from './EmployeeMonthlyModal';
 import CameraPunchModal from './CameraPunchModal';
 import AttendancePhotoModal from './AttendancePhotoModal';
+import { startSystemOffTracking, stopSystemOffTracking, useSystemOffTracker } from '../../services/systemOffTracker';
 import './AttendanceTracker.css';
 
 // Register Chart.js components
@@ -122,6 +123,14 @@ const AttendanceTracker = () => {
   const [checkingOut, setCheckingOut] = useState(false);
   const [selfLoading, setSelfLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Real-time System Off Time & Idle Tracking Hook
+  const {
+    idleSeconds,
+    isIdleOver30Min,
+    systemOffMinutes: liveSystemOffMinutes,
+    activityStatus
+  } = useSystemOffTracker(myStats);
 
   // Live ticking clock for accurate current time display
   useEffect(() => {
@@ -351,12 +360,24 @@ const AttendanceTracker = () => {
       const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 
       const endpoint = punchType === 'check-in' ? '/attendance/check-in' : '/attendance/check-out';
-      await api.post(endpoint, {
+      const payload = {
         time: timeStr,
         date: dateStr,
         allowUpdate: !!isUpdate,
         image: photoBase64
-      });
+      };
+
+      if (punchType === 'check-out') {
+        payload.system_off_minutes = liveSystemOffMinutes;
+      }
+
+      await api.post(endpoint, payload);
+
+      if (punchType === 'check-in') {
+        startSystemOffTracking({ date: dateStr, checkInTime: timeStr, initialOffMinutes: 0 });
+      } else {
+        stopSystemOffTracking();
+      }
 
       setShowCameraModal(false);
       fetchSelfAttendance();
@@ -961,6 +982,16 @@ const AttendanceTracker = () => {
                                   <FaClock size={11} className="text-primary" />
                                   <span>{record.working_hours_formatted}</span>
                                 </span>
+                                {record.system_off_minutes > 0 && (
+                                  <div className="mt-1" style={{ fontSize: '10px' }}>
+                                    <span className="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle py-0 px-1">
+                                      ⏸ Off: {record.system_off_formatted || `${record.system_off_minutes}m`}
+                                    </span>
+                                    <div className="text-muted" style={{ fontSize: '9px' }}>
+                                      Net: <strong className="text-success">{record.net_working_hours}h</strong>
+                                    </div>
+                                  </div>
+                                )}
                                 <div className="mt-1" style={{ maxWidth: '100px' }}>
                                   <ProgressBar 
                                     now={Math.min(100, (record.working_hours / 9) * 100)} 
@@ -1089,6 +1120,42 @@ const AttendanceTracker = () => {
                           </div>
                         )}
 
+                        {/* Live Activity & System Off Time Status Card */}
+                        <div className="bg-light p-3 rounded border mb-3 text-start small">
+                          <div className="d-flex justify-content-between align-items-center mb-2">
+                            <span className="text-muted fw-semibold">Current Activity:</span>
+                            {activityStatus === 'active' ? (
+                              <Badge bg="success" className="d-inline-flex align-items-center gap-1 py-1 px-2">
+                                <span className="spinner-grow spinner-grow-sm text-white" style={{ width: '8px', height: '8px' }} />
+                                <span>Active & Working</span>
+                              </Badge>
+                            ) : activityStatus === 'grace' ? (
+                              <Badge bg="warning" text="dark" className="d-inline-flex align-items-center gap-1 py-1 px-2">
+                                <span>🟡 Away: {Math.floor(idleSeconds / 60)}m (Grace up to 30m)</span>
+                              </Badge>
+                            ) : (
+                              <Badge bg="danger" className="d-inline-flex align-items-center gap-1 py-1 px-2">
+                                <span>🔴 System Off ({Math.floor(idleSeconds / 60)}m inactive)</span>
+                              </Badge>
+                            )}
+                          </div>
+
+                          <div className="d-flex justify-content-between align-items-center pt-2 border-top">
+                            <div>
+                              <span className="text-muted d-block" style={{ fontSize: '11px' }}>System Off Time:</span>
+                              <span className={`fw-bold font-monospace ${liveSystemOffMinutes > 0 ? 'text-danger' : 'text-success'}`}>
+                                {liveSystemOffMinutes > 0 ? `${liveSystemOffMinutes} mins` : '0 mins'}
+                              </span>
+                            </div>
+                            <div className="text-end">
+                              <span className="text-muted d-block" style={{ fontSize: '11px' }}>Net Productive Hours:</span>
+                              <span className="fw-bold font-monospace text-primary">
+                                {myStats?.netWorkingHours !== undefined ? `${myStats.netWorkingHours} hrs` : '--'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
                         <div className="d-flex flex-column align-items-center gap-2">
                           <Button 
                             variant="danger" 
@@ -1120,6 +1187,24 @@ const AttendanceTracker = () => {
                         <p className="text-muted mb-2">
                           Checked out at: <strong className="text-dark font-monospace fs-5">{myStats?.checkOutTime}</strong>
                         </p>
+
+                        {/* Working Hours & System Off Time Summary */}
+                        <div className="bg-light p-3 rounded border mb-3 small d-flex justify-content-between align-items-center text-center">
+                          <div>
+                            <span className="text-muted d-block" style={{ fontSize: '11px' }}>Gross Working</span>
+                            <strong className="text-dark font-monospace">{myStats?.workingHours || 0} hrs</strong>
+                          </div>
+                          <div>
+                            <span className="text-muted d-block" style={{ fontSize: '11px' }}>System Off Time (&gt;30m)</span>
+                            <span className={`badge ${myStats?.systemOffMinutes > 0 ? 'bg-danger' : 'bg-success bg-opacity-25 text-success'}`}>
+                              {myStats?.systemOffMinutes || 0}m
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-muted d-block" style={{ fontSize: '11px' }}>Net Productive</span>
+                            <strong className="text-primary font-monospace">{myStats?.netWorkingHours || myStats?.workingHours || 0} hrs</strong>
+                          </div>
+                        </div>
 
                         {/* Punch In and Punch Out Photos Side by Side */}
                         <div className="d-flex align-items-center justify-content-center gap-3 mb-3">
@@ -1653,6 +1738,16 @@ const AttendanceTracker = () => {
                                   <FaClock size={11} className="text-primary" />
                                   <span>{day.working_hours_formatted}</span>
                                 </span>
+                                {day.system_off_minutes > 0 && (
+                                  <div className="mt-1" style={{ fontSize: '10px' }}>
+                                    <span className="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle py-0 px-1">
+                                      ⏸ Off: {day.system_off_formatted || `${day.system_off_minutes}m`}
+                                    </span>
+                                    <div className="text-muted" style={{ fontSize: '9px' }}>
+                                      Net: <strong className="text-success">{day.net_working_hours}h</strong>
+                                    </div>
+                                  </div>
+                                )}
                                 <div className="mt-1" style={{ maxWidth: '100px' }}>
                                   <ProgressBar 
                                     now={Math.min(100, (day.working_hours / 9) * 100)} 

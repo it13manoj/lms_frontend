@@ -155,6 +155,26 @@ const PunchDetailsModal = ({ show, onHide, record }) => {
             </div>
           </div>
 
+          {/* Working Hours & System Off Time Breakdown */}
+          <div className="p-2 mb-3 rounded bg-light border d-flex justify-content-between align-items-center small">
+            <div>
+              <span className="text-muted d-block" style={{ fontSize: '11px' }}>Gross Hours</span>
+              <strong className="text-dark font-monospace">{record.working_hours || 0} hrs</strong>
+            </div>
+            <div className="text-center">
+              <span className="text-muted d-block" style={{ fontSize: '11px' }}>System Off Time (&gt;30m)</span>
+              <span className={`badge ${record.system_off_minutes > 0 ? 'bg-danger' : 'bg-success bg-opacity-25 text-success'}`}>
+                {record.system_off_minutes ? `${record.system_off_minutes}m` : '0m'}
+              </span>
+            </div>
+            <div className="text-end">
+              <span className="text-muted d-block" style={{ fontSize: '11px' }}>Net Productive</span>
+              <strong className="text-primary font-monospace fs-6">
+                {record.net_working_hours !== undefined ? record.net_working_hours : (record.working_hours || 0)} hrs
+              </strong>
+            </div>
+          </div>
+
           {/* All raw punches table */}
           <h6 className="fs-6 fw-bold mb-2">Biometric Punch Timestamps ({rawPunches.length})</h6>
           {rawPunches.length > 0 ? (
