@@ -915,28 +915,27 @@ const AttendanceTracker = () => {
                               <div className="d-flex align-items-center gap-2">
                                 {record.check_in_image && (
                                   <div 
-                                    className="rounded overflow-hidden shadow-sm border position-relative flex-shrink-0"
-                                    style={{ width: '34px', height: '34px', cursor: 'pointer', background: '#000' }}
+                                    className="punch-photo-thumb-wrapper"
                                     onClick={() => setPreviewPhotoData({
                                       image: record.check_in_image,
+                                      imageSrc: getImageSrc(record.check_in_image),
                                       punchType: 'check-in',
                                       employeeName: record.name,
                                       jobNo: record.job_no,
                                       date: record.date,
                                       time: record.check_in_formatted
                                     })}
-                                    title="Click to view check-in arrival photo"
+                                    title="Click to view full Check-In photo"
+                                    style={{ width: '36px', height: '36px', minWidth: '36px', minHeight: '36px', cursor: 'pointer' }}
                                   >
                                     <img 
                                       src={getImageSrc(record.check_in_image)} 
-                                      alt="In Photo" 
-                                      className="w-100 h-100" 
-                                      style={{ objectFit: 'cover' }}
+                                      alt="In" 
+                                      className="punch-photo-thumb" 
+                                      style={{ width: '36px', height: '36px', minWidth: '36px', minHeight: '36px', objectFit: 'cover' }}
                                       onError={handleImageError}
                                     />
-                                    <div className="position-absolute bottom-0 end-0 bg-dark bg-opacity-75 text-white" style={{ fontSize: '7px', padding: '1px' }}>
-                                      <FaCamera />
-                                    </div>
+                                    <div className="punch-photo-badge in">IN</div>
                                   </div>
                                 )}
                                 <div>
@@ -966,28 +965,27 @@ const AttendanceTracker = () => {
                                 <div className="d-flex align-items-center gap-2">
                                   {record.check_out_image && (
                                     <div 
-                                      className="rounded overflow-hidden shadow-sm border position-relative flex-shrink-0"
-                                      style={{ width: '34px', height: '34px', cursor: 'pointer', background: '#000' }}
+                                      className="punch-photo-thumb-wrapper"
                                       onClick={() => setPreviewPhotoData({
                                         image: record.check_out_image,
+                                        imageSrc: getImageSrc(record.check_out_image),
                                         punchType: 'check-out',
                                         employeeName: record.name,
                                         jobNo: record.job_no,
                                         date: record.date,
                                         time: record.check_out_formatted
                                       })}
-                                      title="Click to view check-out departure photo"
+                                      title="Click to view full Check-Out photo"
+                                      style={{ width: '36px', height: '36px', minWidth: '36px', minHeight: '36px', cursor: 'pointer' }}
                                     >
                                       <img 
                                         src={getImageSrc(record.check_out_image)} 
-                                        alt="Out Photo" 
-                                        className="w-100 h-100" 
-                                        style={{ objectFit: 'cover' }}
+                                        alt="Out" 
+                                        className="punch-photo-thumb" 
+                                        style={{ width: '36px', height: '36px', minWidth: '36px', minHeight: '36px', objectFit: 'cover' }}
                                         onError={handleImageError}
                                       />
-                                      <div className="position-absolute bottom-0 end-0 bg-dark bg-opacity-75 text-white" style={{ fontSize: '7px', padding: '1px' }}>
-                                        <FaCamera />
-                                      </div>
+                                      <div className="punch-photo-badge out">OUT</div>
                                     </div>
                                   )}
                                   <div>
@@ -1715,7 +1713,9 @@ const AttendanceTracker = () => {
                                   <div 
                                     className="punch-photo-thumb-wrapper"
                                     onClick={() => setPreviewPhotoData({
+                                      image: day.check_in_image,
                                       imageSrc: getImageSrc(day.check_in_image),
+                                      punchType: 'check-in',
                                       title: `Punch-In Photo - ${selfMonthlyData?.employee?.name || 'Me'}`,
                                       employeeName: selfMonthlyData?.employee?.name || user?.name || 'Me',
                                       jobNo: selfMonthlyData?.employee?.employee_id || user?.employee?.employee_id || '',
@@ -1724,11 +1724,13 @@ const AttendanceTracker = () => {
                                       type: 'Check-In'
                                     })}
                                     title="Click to view full Check-In photo"
+                                    style={{ width: '36px', height: '36px', minWidth: '36px', minHeight: '36px', cursor: 'pointer' }}
                                   >
                                     <img 
                                       src={getImageSrc(day.check_in_image)} 
                                       alt="In" 
                                       className="punch-photo-thumb" 
+                                      style={{ width: '36px', height: '36px', minWidth: '36px', minHeight: '36px', objectFit: 'cover' }}
                                       onError={handleImageError}
                                     />
                                     <div className="punch-photo-badge in">IN</div>
@@ -1761,7 +1763,9 @@ const AttendanceTracker = () => {
                                     <div 
                                       className="punch-photo-thumb-wrapper"
                                       onClick={() => setPreviewPhotoData({
+                                        image: day.check_out_image,
                                         imageSrc: getImageSrc(day.check_out_image),
+                                        punchType: 'check-out',
                                         title: `Punch-Out Photo - ${selfMonthlyData?.employee?.name || 'Me'}`,
                                         employeeName: selfMonthlyData?.employee?.name || user?.name || 'Me',
                                         jobNo: selfMonthlyData?.employee?.employee_id || user?.employee?.employee_id || '',
@@ -1770,11 +1774,13 @@ const AttendanceTracker = () => {
                                         type: 'Check-Out'
                                       })}
                                       title="Click to view full Check-Out photo"
+                                      style={{ width: '36px', height: '36px', minWidth: '36px', minHeight: '36px', cursor: 'pointer' }}
                                     >
                                       <img 
                                         src={getImageSrc(day.check_out_image)} 
                                         alt="Out" 
                                         className="punch-photo-thumb" 
+                                        style={{ width: '36px', height: '36px', minWidth: '36px', minHeight: '36px', objectFit: 'cover' }}
                                         onError={handleImageError}
                                       />
                                       <div className="punch-photo-badge out">OUT</div>

@@ -523,25 +523,27 @@ const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches, onViewPho
                             <div 
                               className="punch-photo-thumb-wrapper"
                               onClick={() => onViewPhoto({
+                                image: day.check_in_image,
                                 imageSrc: getImageSrc(day.check_in_image),
                                 title: `Punch-In Photo - ${attendanceData.employee?.name || employee?.name || 'Employee'}`,
                                 employeeName: attendanceData.employee?.name || employee?.name || 'Employee',
                                 jobNo: attendanceData.employee?.job_no || employee?.employee_id || '',
                                 time: day.check_in_formatted,
                                 date: day.date,
-                                type: 'Check-In'
+                                type: 'Check-In',
+                                punchType: 'check-in'
                               })}
                               title="Click to view full Punch-In photo"
-                              style={{ cursor: 'pointer', position: 'relative', flexShrink: 0 }}
+                              style={{ width: '36px', height: '36px', minWidth: '36px', minHeight: '36px', cursor: 'pointer' }}
                             >
                               <img 
                                 src={getImageSrc(day.check_in_image)} 
                                 alt="In" 
                                 className="punch-photo-thumb" 
-                                style={{ width: '38px', height: '38px', objectFit: 'cover', borderRadius: '8px', border: '1.5px solid #22c55e' }}
+                                style={{ width: '36px', height: '36px', minWidth: '36px', minHeight: '36px', objectFit: 'cover' }}
                                 onError={handleImageError}
                               />
-                              <span style={{ position: 'absolute', bottom: '-4px', right: '-4px', fontSize: '8px', fontWeight: 'bold', background: '#22c55e', color: '#fff', borderRadius: '4px', padding: '1px 3px' }}>IN</span>
+                              <div className="punch-photo-badge in">IN</div>
                             </div>
                           ) : null}
                           <div>
@@ -575,26 +577,28 @@ const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches, onViewPho
                               <div 
                                 className="punch-photo-thumb-wrapper"
                                 onClick={() => onViewPhoto({
+                                  image: day.check_out_image,
                                   imageSrc: getImageSrc(day.check_out_image),
                                   title: `Punch-Out Photo - ${attendanceData.employee?.name || employee?.name || 'Employee'}`,
                                   employeeName: attendanceData.employee?.name || employee?.name || 'Employee',
                                   jobNo: attendanceData.employee?.job_no || employee?.employee_id || '',
                                   time: day.check_out_formatted,
                                   date: day.date,
-                                  type: 'Check-Out'
+                                  type: 'Check-Out',
+                                  punchType: 'check-out'
                                 })}
                                 title="Click to view full Punch-Out photo"
-                                style={{ cursor: 'pointer', position: 'relative', flexShrink: 0 }}
+                                style={{ width: '36px', height: '36px', minWidth: '36px', minHeight: '36px', cursor: 'pointer' }}
                               >
                                 <img 
-                                src={getImageSrc(day.check_out_image)} 
-                                alt="Out" 
-                                className="punch-photo-thumb" 
-                                style={{ width: '38px', height: '38px', objectFit: 'cover', borderRadius: '8px', border: '1.5px solid #f97316' }}
-                                onError={handleImageError}
-                              />
-                              <span style={{ position: 'absolute', bottom: '-4px', right: '-4px', fontSize: '8px', fontWeight: 'bold', background: '#f97316', color: '#fff', borderRadius: '4px', padding: '1px 3px' }}>OUT</span>
-                            </div>
+                                  src={getImageSrc(day.check_out_image)} 
+                                  alt="Out" 
+                                  className="punch-photo-thumb" 
+                                  style={{ width: '36px', height: '36px', minWidth: '36px', minHeight: '36px', objectFit: 'cover' }}
+                                  onError={handleImageError}
+                                />
+                                <div className="punch-photo-badge out">OUT</div>
+                              </div>
                             ) : null}
                             <div>
                               <span className="fw-bold font-monospace">{day.check_out_formatted}</span>
