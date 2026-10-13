@@ -90,6 +90,11 @@
   color: #16a34a;
 }
 
+.kpi-icon-wrapper.systemoff {
+  background-color: #fff1f2;
+  color: #e11d48;
+}
+
 .kpi-value {
   font-size: 26px;
   font-weight: 700;

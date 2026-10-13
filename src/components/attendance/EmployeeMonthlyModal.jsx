@@ -125,7 +125,7 @@ const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches, onViewPho
 
     const headers = [
       'Date', 'Day', 'Status', 'Check-In', 'Late Comment',
-      'Check-Out', 'Early Departure Comment', 'Working Hours', 'Remarks'
+      'Check-Out', 'Early Departure Comment', 'System Off Time', 'Working Hours', 'Net Working Hours', 'Remarks'
     ];
     const rows = attendanceData.days.map(d => [
       `"${d.date}"`,
@@ -135,7 +135,9 @@ const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches, onViewPho
       `"${d.late_comment || ''}"`,
       `"${d.check_out_formatted || '--:--'}"`,
       `"${d.early_leave_comment || ''}"`,
+      `"${d.system_off_formatted || `${d.system_off_minutes || 0}m`}"`,
       `"${d.working_hours || 0}"`,
+      `"${d.net_working_hours !== undefined ? d.net_working_hours : (d.working_hours || 0)}"`,
       `"${d.remarks || ''}"`
     ]);
 
@@ -430,7 +432,7 @@ const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches, onViewPho
             </div>
           </Col>
 
-          <Col xs={6} sm={4} md={2}>
+          <Col xs={6} sm={4} md={2} xl>
             <div 
               className={`border rounded p-2 text-center bg-white shadow-sm modal-kpi-card ${
                 statusFilter === 'on_time' ? 'border-success border-2 bg-success bg-opacity-10 active-filter' : ''
@@ -442,6 +444,24 @@ const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches, onViewPho
               <div className="fs-5 fw-bold text-success mt-1">{summary.onTimeCount}</div>
               <div className="text-muted" style={{ fontSize: '11px' }}>
                 {statusFilter === 'on_time' ? '✓ Active' : `${summary.totalWorkingHours}h total`}
+              </div>
+            </div>
+          </Col>
+
+          <Col xs={6} sm={4} md={2} xl>
+            <div 
+              className={`border rounded p-2 text-center bg-white shadow-sm modal-kpi-card ${
+                statusFilter === 'system_off' ? 'border-danger border-2 bg-danger bg-opacity-10 active-filter' : ''
+              }`}
+              onClick={() => setStatusFilter(statusFilter === 'system_off' ? 'all' : 'system_off')}
+              title="Click to toggle filter: Days with System Off Time"
+            >
+              <div className="text-danger small fw-bold">SYSTEM OFF</div>
+              <div className="fs-5 fw-bold text-danger mt-1">
+                {summary.totalSystemOffFormatted || `${summary.totalSystemOffMinutes || 0}m`}
+              </div>
+              <div className="text-muted" style={{ fontSize: '11px' }}>
+                {statusFilter === 'system_off' ? '✓ Active' : `Net: ${summary.totalNetWorkingHours || summary.totalWorkingHours || 0}h`}
               </div>
             </div>
           </Col>
@@ -470,6 +490,7 @@ const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches, onViewPho
                   <th>Status</th>
                   <th>Check-In (09:30 AM)</th>
                   <th>Check-Out (06:30 PM)</th>
+                  <th>System Off Time</th>
                   <th>Working Hours</th>
                   <th>Remarks / Comment</th>
                   <th>Punches</th>
@@ -630,6 +651,28 @@ const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches, onViewPho
                       )}
                     </td>
 
+                    {/* System Off Time */}
+                    <td>
+                      {day.is_present ? (
+                        day.system_off_minutes > 0 ? (
+                          <div>
+                            <span className="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle font-monospace py-1 px-2" style={{ fontSize: '11px' }}>
+                              ⏸ {day.system_off_formatted || `${day.system_off_minutes}m`}
+                            </span>
+                            <div className="text-muted mt-1" style={{ fontSize: '10px' }}>Inactive &gt; 30m</div>
+                          </div>
+                        ) : (
+                          <div>
+                            <span className="badge bg-success bg-opacity-10 text-success border border-success-subtle font-monospace py-1 px-2" style={{ fontSize: '11px' }}>
+                              ✓ 0m (Active)
+                            </span>
+                          </div>
+                        )
+                      ) : (
+                        <span className="text-muted small">--</span>
+                      )}
+                    </td>
+
                     {/* Working Hours */}
                     <td>
                       {day.is_present && day.working_hours > 0 ? (
@@ -638,20 +681,20 @@ const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches, onViewPho
                             <FaClock size={10} className="text-primary" />
                             <span>{day.working_hours_formatted}</span>
                           </span>
-                          {day.system_off_minutes > 0 && (
-                            <div className="mt-1" style={{ fontSize: '10px' }}>
-                              <span className="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle py-0 px-1">
-                                Off: {day.system_off_formatted || `${day.system_off_minutes}m`}
-                              </span>
-                              <div className="text-muted" style={{ fontSize: '9px' }}>
-                                Net: <strong className="text-success">{day.net_working_hours}h</strong>
-                              </div>
+                          {day.system_off_minutes > 0 ? (
+                            <div className="mt-1" style={{ fontSize: '11px' }}>
+                              <span className="text-muted">Net: </span>
+                              <strong className="text-success font-monospace">{day.net_working_hours}h</strong>
+                            </div>
+                          ) : (
+                            <div className="text-muted mt-1" style={{ fontSize: '10px' }}>
+                              Net: <strong className="text-success">{day.working_hours}h</strong>
                             </div>
                           )}
                           <div className="mt-1" style={{ maxWidth: '90px' }}>
                             <ProgressBar 
-                              now={Math.min(100, (day.working_hours / 9) * 100)} 
-                              variant={day.working_hours >= 8 ? 'success' : day.working_hours >= 4 ? 'warning' : 'danger'}
+                              now={Math.min(100, ((day.net_working_hours !== undefined ? day.net_working_hours : day.working_hours) / 9) * 100)} 
+                              variant={(day.net_working_hours !== undefined ? day.net_working_hours : day.working_hours) >= 8 ? 'success' : (day.net_working_hours !== undefined ? day.net_working_hours : day.working_hours) >= 4 ? 'warning' : 'danger'}
                               style={{ height: '3px' }}
                             />
                           </div>

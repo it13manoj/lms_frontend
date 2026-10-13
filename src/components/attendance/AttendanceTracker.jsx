@@ -11,7 +11,7 @@ import {
   FaSearch, FaChevronLeft, FaChevronRight, FaFileDownload,
   FaEye, FaBuilding, FaUserTie, FaHistory, FaCalendarDay,
   FaBusinessTime, FaDoorOpen, FaCalendarAlt, FaMoneyBillWave,
-  FaCamera, FaSearchPlus, FaDesktop, FaMobileAlt
+  FaCamera, FaSearchPlus, FaDesktop, FaMobileAlt, FaPauseCircle
 } from 'react-icons/fa';
 import {
   Chart as ChartJS,
@@ -450,7 +450,7 @@ const AttendanceTracker = () => {
 
     const headers = [
       'Date', 'Day', 'Status', 'Check-In', 'Late Comment',
-      'Check-Out', 'Early Departure Comment', 'Working Hours', 'Remarks'
+      'Check-Out', 'Early Departure Comment', 'System Off Time', 'Working Hours', 'Net Working Hours', 'Remarks'
     ];
     const rows = selfMonthlyData.days.map(d => [
       `"${d.date}"`,
@@ -460,7 +460,9 @@ const AttendanceTracker = () => {
       `"${d.late_comment || ''}"`,
       `"${d.check_out_formatted || '--:--'}"`,
       `"${d.early_leave_comment || ''}"`,
+      `"${d.system_off_formatted || `${d.system_off_minutes || 0}m`}"`,
       `"${d.working_hours || 0}"`,
+      `"${d.net_working_hours !== undefined ? d.net_working_hours : (d.working_hours || 0)}"`,
       `"${d.remarks || ''}"`
     ]);
 
@@ -643,7 +645,7 @@ const AttendanceTracker = () => {
 
           {/* KPI Summary Cards */}
           <Row className="g-3 mb-4">
-            <Col xs={6} sm={4} lg={2}>
+            <Col xs={6} sm={4} md={3} lg>
               <Card 
                 className={`kpi-stat-card h-100 ${statusFilter === 'all' ? 'border border-primary border-2 bg-primary bg-opacity-10' : ''}`}
                 style={{ cursor: 'pointer' }}
@@ -665,7 +667,7 @@ const AttendanceTracker = () => {
               </Card>
             </Col>
 
-            <Col xs={6} sm={4} lg={2}>
+            <Col xs={6} sm={4} md={3} lg>
               <Card 
                 className={`kpi-stat-card h-100 ${statusFilter === 'present' ? 'border border-success border-2 bg-success bg-opacity-10' : ''}`}
                 style={{ cursor: 'pointer' }}
@@ -691,7 +693,7 @@ const AttendanceTracker = () => {
               </Card>
             </Col>
 
-            <Col xs={6} sm={4} lg={2}>
+            <Col xs={6} sm={4} md={3} lg>
               <Card 
                 className={`kpi-stat-card h-100 ${statusFilter === 'absent' ? 'border border-danger border-2 bg-danger bg-opacity-10' : ''}`}
                 style={{ cursor: 'pointer' }}
@@ -713,7 +715,7 @@ const AttendanceTracker = () => {
               </Card>
             </Col>
 
-            <Col xs={6} sm={4} lg={2}>
+            <Col xs={6} sm={4} md={3} lg>
               <Card 
                 className={`kpi-stat-card h-100 ${statusFilter === 'late' ? 'border border-warning border-2 bg-warning bg-opacity-10' : ''}`}
                 style={{ cursor: 'pointer' }}
@@ -735,7 +737,7 @@ const AttendanceTracker = () => {
               </Card>
             </Col>
 
-            <Col xs={6} sm={4} lg={2}>
+            <Col xs={6} sm={4} md={3} lg>
               <Card 
                 className={`kpi-stat-card h-100 ${statusFilter === 'early_leave' ? 'border border-info border-2 bg-info bg-opacity-10' : ''}`}
                 style={{ cursor: 'pointer' }}
@@ -757,7 +759,7 @@ const AttendanceTracker = () => {
               </Card>
             </Col>
 
-            <Col xs={6} sm={4} lg={2}>
+            <Col xs={6} sm={4} md={3} lg>
               <Card 
                 className={`kpi-stat-card h-100 ${statusFilter === 'on_time' ? 'border border-success border-2 bg-success bg-opacity-10' : ''}`}
                 style={{ cursor: 'pointer' }}
@@ -773,6 +775,30 @@ const AttendanceTracker = () => {
                     <div className="kpi-value text-success">{summary.onTimeCount || 0}</div>
                     <div className="kpi-subtext">
                       {statusFilter === 'on_time' ? '✓ Active' : 'Standard hours'}
+                    </div>
+                  </div>
+                </Card.Body>
+              </Card>
+            </Col>
+
+            <Col xs={6} sm={4} md={3} lg>
+              <Card 
+                className={`kpi-stat-card h-100 ${statusFilter === 'system_off' ? 'border border-danger border-2 bg-danger bg-opacity-10' : ''}`}
+                style={{ cursor: 'pointer' }}
+                onClick={() => setStatusFilter(statusFilter === 'system_off' ? 'all' : 'system_off')}
+                title="Click to toggle filter: Staff with System Off Time (> 30m Inactive)"
+              >
+                <Card.Body className="d-flex align-items-center gap-3">
+                  <div className="kpi-icon-wrapper systemoff">
+                    <FaPauseCircle />
+                  </div>
+                  <div>
+                    <div className="kpi-label text-danger">System Off</div>
+                    <div className="kpi-value text-danger">
+                      {summary.systemOffCount !== undefined ? summary.systemOffCount : dailyData.filter(r => r.is_present && (r.system_off_minutes || 0) > 0).length}
+                    </div>
+                    <div className="kpi-subtext">
+                      {statusFilter === 'system_off' ? '✓ Active' : '> 30m inactive'}
                     </div>
                   </div>
                 </Card.Body>
@@ -801,6 +827,7 @@ const AttendanceTracker = () => {
                   { id: 'late', label: `Late Comers (${summary.lateCount || 0})` },
                   { id: 'early_leave', label: `Left Early (${summary.earlyLeaveCount || 0})` },
                   { id: 'on_time', label: `On Time (${summary.onTimeCount || 0})` },
+                  { id: 'system_off', label: `System Off (${summary.systemOffCount !== undefined ? summary.systemOffCount : dailyData.filter(r => r.is_present && (r.system_off_minutes || 0) > 0).length})` },
                 ].map(tab => (
                   <Button
                     key={tab.id}
@@ -855,6 +882,7 @@ const AttendanceTracker = () => {
                         <th>Status</th>
                         <th>Check-In (Office: 09:30 AM)</th>
                         <th>Check-Out (Office: 06:30 PM)</th>
+                        <th>System Off Time</th>
                         <th>Working Hours</th>
                         <th>Actions</th>
                       </tr>
@@ -1017,6 +1045,40 @@ const AttendanceTracker = () => {
                             )}
                           </td>
 
+                          {/* System Off Time */}
+                          <td>
+                            {record.is_present ? (
+                              record.system_off_minutes > 0 ? (
+                                <div>
+                                  <div className="d-flex align-items-center gap-1">
+                                    <span 
+                                      className={`badge ${record.is_live_off ? 'bg-danger text-white' : 'bg-danger bg-opacity-10 text-danger border border-danger-subtle'} py-1 px-2 font-monospace`}
+                                      style={{ fontSize: '11px' }}
+                                    >
+                                      ⏸ {record.system_off_formatted || `${record.system_off_minutes}m`}
+                                    </span>
+                                  </div>
+                                  <div className="text-muted mt-1" style={{ fontSize: '10px' }}>
+                                    {record.is_live_off ? (
+                                      <span className="text-danger fw-semibold">🔴 Live Off (&gt; 30m)</span>
+                                    ) : (
+                                      <span>Inactive &gt; 30m</span>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div>
+                                  <span className="badge bg-success bg-opacity-10 text-success border border-success-subtle py-1 px-2 font-monospace" style={{ fontSize: '11px' }}>
+                                    ✓ 0m (Active)
+                                  </span>
+                                  <div className="text-muted mt-1" style={{ fontSize: '10px' }}>Continuous</div>
+                                </div>
+                              )
+                            ) : (
+                              <span className="text-muted small">--</span>
+                            )}
+                          </td>
+
                           {/* Working Hours */}
                           <td>
                             {record.is_present && record.working_hours > 0 ? (
@@ -1025,20 +1087,20 @@ const AttendanceTracker = () => {
                                   <FaClock size={11} className="text-primary" />
                                   <span>{record.working_hours_formatted}</span>
                                 </span>
-                                {record.system_off_minutes > 0 && (
-                                  <div className="mt-1" style={{ fontSize: '10px' }}>
-                                    <span className="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle py-0 px-1">
-                                      ⏸ Off: {record.system_off_formatted || `${record.system_off_minutes}m`}
-                                    </span>
-                                    <div className="text-muted" style={{ fontSize: '9px' }}>
-                                      Net: <strong className="text-success">{record.net_working_hours}h</strong>
-                                    </div>
+                                {record.system_off_minutes > 0 ? (
+                                  <div className="mt-1" style={{ fontSize: '11px' }}>
+                                    <span className="text-muted">Net: </span>
+                                    <strong className="text-success font-monospace">{record.net_working_hours}h</strong>
+                                  </div>
+                                ) : (
+                                  <div className="text-muted mt-1" style={{ fontSize: '10px' }}>
+                                    Net: <strong className="text-success">{record.working_hours}h</strong>
                                   </div>
                                 )}
                                 <div className="mt-1" style={{ maxWidth: '100px' }}>
                                   <ProgressBar 
-                                    now={Math.min(100, (record.working_hours / 9) * 100)} 
-                                    variant={record.working_hours >= 8 ? 'success' : record.working_hours >= 4 ? 'warning' : 'danger'}
+                                    now={Math.min(100, ((record.net_working_hours !== undefined ? record.net_working_hours : record.working_hours) / 9) * 100)} 
+                                    variant={(record.net_working_hours !== undefined ? record.net_working_hours : record.working_hours) >= 8 ? 'success' : (record.net_working_hours !== undefined ? record.net_working_hours : record.working_hours) >= 4 ? 'warning' : 'danger'}
                                     style={{ height: '4px' }}
                                   />
                                 </div>
@@ -1623,7 +1685,7 @@ const AttendanceTracker = () => {
                   </div>
                 </Col>
 
-                <Col xs={6} sm={4} md={2}>
+                <Col xs={6} sm={4} md={2} xl>
                   <div 
                     className={`border rounded p-2 text-center bg-white shadow-sm modal-kpi-card ${
                       selfStatusFilter === 'on_time' ? 'border-success border-2 bg-success bg-opacity-10 active-filter' : ''
@@ -1635,6 +1697,24 @@ const AttendanceTracker = () => {
                     <div className="fs-5 fw-bold text-success mt-1">{selfMonthlyData?.summary?.onTimeCount || 0}</div>
                     <div className="text-muted" style={{ fontSize: '11px' }}>
                       {selfStatusFilter === 'on_time' ? '✓ Active' : `${selfMonthlyData?.summary?.totalWorkingHours || 0}h total`}
+                    </div>
+                  </div>
+                </Col>
+
+                <Col xs={6} sm={4} md={2} xl>
+                  <div 
+                    className={`border rounded p-2 text-center bg-white shadow-sm modal-kpi-card ${
+                      selfStatusFilter === 'system_off' ? 'border-danger border-2 bg-danger bg-opacity-10 active-filter' : ''
+                    }`}
+                    onClick={() => setSelfStatusFilter(selfStatusFilter === 'system_off' ? 'all' : 'system_off')}
+                    title="Click to toggle filter: Days with System Off Time"
+                  >
+                    <div className="text-danger small fw-bold">SYSTEM OFF</div>
+                    <div className="fs-5 fw-bold text-danger mt-1">
+                      {selfMonthlyData?.summary?.totalSystemOffFormatted || `${selfMonthlyData?.summary?.totalSystemOffMinutes || 0}m`}
+                    </div>
+                    <div className="text-muted" style={{ fontSize: '11px' }}>
+                      {selfStatusFilter === 'system_off' ? '✓ Active' : `Net: ${selfMonthlyData?.summary?.totalNetWorkingHours || selfMonthlyData?.summary?.totalWorkingHours || 0}h`}
                     </div>
                   </div>
                 </Col>
@@ -1663,6 +1743,7 @@ const AttendanceTracker = () => {
                         <th>Status</th>
                         <th>Check-In (09:30 AM)</th>
                         <th>Check-Out (06:30 PM)</th>
+                        <th>System Off Time</th>
                         <th>Working Hours</th>
                         <th>Remarks / Comment</th>
                         <th>Biometric Logs</th>
@@ -1811,6 +1892,28 @@ const AttendanceTracker = () => {
                             )}
                           </td>
 
+                          {/* System Off Time */}
+                          <td>
+                            {day.is_present ? (
+                              day.system_off_minutes > 0 ? (
+                                <div>
+                                  <span className="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle py-1 px-2 font-monospace" style={{ fontSize: '11px' }}>
+                                    ⏸ {day.system_off_formatted || `${day.system_off_minutes}m`}
+                                  </span>
+                                  <div className="text-muted mt-1" style={{ fontSize: '10px' }}>Inactive &gt; 30m</div>
+                                </div>
+                              ) : (
+                                <div>
+                                  <span className="badge bg-success bg-opacity-10 text-success border border-success-subtle py-1 px-2 font-monospace" style={{ fontSize: '11px' }}>
+                                    ✓ 0m (Active)
+                                  </span>
+                                </div>
+                              )
+                            ) : (
+                              <span className="text-muted small">--</span>
+                            )}
+                          </td>
+
                           {/* Working Hours */}
                           <td>
                             {day.is_present && day.working_hours > 0 ? (
@@ -1819,20 +1922,20 @@ const AttendanceTracker = () => {
                                   <FaClock size={11} className="text-primary" />
                                   <span>{day.working_hours_formatted}</span>
                                 </span>
-                                {day.system_off_minutes > 0 && (
-                                  <div className="mt-1" style={{ fontSize: '10px' }}>
-                                    <span className="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle py-0 px-1">
-                                      ⏸ Off: {day.system_off_formatted || `${day.system_off_minutes}m`}
-                                    </span>
-                                    <div className="text-muted" style={{ fontSize: '9px' }}>
-                                      Net: <strong className="text-success">{day.net_working_hours}h</strong>
-                                    </div>
+                                {day.system_off_minutes > 0 ? (
+                                  <div className="mt-1" style={{ fontSize: '11px' }}>
+                                    <span className="text-muted">Net: </span>
+                                    <strong className="text-success font-monospace">{day.net_working_hours}h</strong>
+                                  </div>
+                                ) : (
+                                  <div className="text-muted mt-1" style={{ fontSize: '10px' }}>
+                                    Net: <strong className="text-success">{day.working_hours}h</strong>
                                   </div>
                                 )}
                                 <div className="mt-1" style={{ maxWidth: '100px' }}>
                                   <ProgressBar 
-                                    now={Math.min(100, (day.working_hours / 9) * 100)} 
-                                    variant={day.working_hours >= 8 ? 'success' : day.working_hours >= 4 ? 'warning' : 'danger'}
+                                    now={Math.min(100, ((day.net_working_hours !== undefined ? day.net_working_hours : day.working_hours) / 9) * 100)} 
+                                    variant={(day.net_working_hours !== undefined ? day.net_working_hours : day.working_hours) >= 8 ? 'success' : (day.net_working_hours !== undefined ? day.net_working_hours : day.working_hours) >= 4 ? 'warning' : 'danger'}
                                     style={{ height: '4px' }}
                                   />
                                 </div>
