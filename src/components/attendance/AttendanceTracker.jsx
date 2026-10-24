@@ -11,7 +11,8 @@ import {
   FaSearch, FaChevronLeft, FaChevronRight, FaFileDownload,
   FaEye, FaBuilding, FaUserTie, FaHistory, FaCalendarDay,
   FaBusinessTime, FaDoorOpen, FaCalendarAlt, FaMoneyBillWave,
-  FaCamera, FaSearchPlus, FaDesktop, FaMobileAlt, FaPauseCircle
+  FaCamera, FaSearchPlus, FaDesktop, FaMobileAlt, FaPauseCircle,
+  FaUserClock, FaEdit
 } from 'react-icons/fa';
 import {
   Chart as ChartJS,
@@ -32,6 +33,7 @@ import PunchDetailsModal from './PunchDetailsModal';
 import EmployeeMonthlyModal from './EmployeeMonthlyModal';
 import CameraPunchModal from './CameraPunchModal';
 import AttendancePhotoModal from './AttendancePhotoModal';
+import ManualAttendanceModal from './ManualAttendanceModal';
 import { startSystemOffTracking, stopSystemOffTracking, useSystemOffTracker } from '../../services/systemOffTracker';
 import { isMobileDevice } from '../../utils/deviceDetector';
 import './AttendanceTracker.css';
@@ -91,6 +93,10 @@ const AttendanceTracker = () => {
   const [showPunchModal, setShowPunchModal] = useState(false);
   const [selectedMonthlyEmployee, setSelectedMonthlyEmployee] = useState(null);
   const [showMonthlyModal, setShowMonthlyModal] = useState(false);
+
+  // Manual Attendance Entry & Edit Modal
+  const [showManualModal, setShowManualModal] = useState(false);
+  const [manualModalRecord, setManualModalRecord] = useState(null);
 
   // Camera Punch Verification & Photo Preview State
   const [showCameraModal, setShowCameraModal] = useState(false);
@@ -476,6 +482,22 @@ const AttendanceTracker = () => {
     document.body.removeChild(link);
   };
 
+  // Open Manual Attendance Modal (for Add or Edit)
+  const handleOpenManualEntry = (record = null) => {
+    setManualModalRecord(record);
+    setShowManualModal(true);
+  };
+
+  const handleManualSuccess = (savedRecord, affectedDate) => {
+    if (isAdminOrHR) {
+      fetchDailyAttendance(selectedDate);
+    }
+    fetchSelfAttendance();
+    if (selfYear && selfMonth) {
+      fetchSelfMonthlyAttendance(selfYear, selfMonth, selfStatusFilter, selfDateSearch);
+    }
+  };
+
   // Format Helper for display
   const getInitials = (name) => {
     if (!name) return 'E';
@@ -504,6 +526,18 @@ const AttendanceTracker = () => {
         </div>
 
         <div className="d-flex flex-wrap align-items-center gap-2">
+          {isAdminOrHR && activeTab === 'panel' && (
+            <Button 
+              variant="success" 
+              className="d-flex align-items-center gap-2 shadow-sm text-white"
+              onClick={() => handleOpenManualEntry(null)}
+              title="Add or regularize attendance punches for any employee on any date"
+            >
+              <FaUserClock />
+              <span>+ Manual Entry</span>
+            </Button>
+          )}
+
           {isAdminOrHR && (
             <Button 
               variant="primary" 
@@ -1126,6 +1160,19 @@ const AttendanceTracker = () => {
                                 </Button>
                               ) : (
                                 <span className="text-muted small me-1">No punches</span>
+                              )}
+
+                              {isAdminOrHR && (
+                                <Button 
+                                  variant="outline-warning" 
+                                  size="sm" 
+                                  className="py-1 px-2 d-flex align-items-center gap-1"
+                                  onClick={() => handleOpenManualEntry(record)}
+                                  title="Edit attendance punch times or status for this employee"
+                                >
+                                  <FaEdit size={12} />
+                                  <span>Edit</span>
+                                </Button>
                               )}
 
                               {isAdminOrHR && (
@@ -2015,6 +2062,7 @@ const AttendanceTracker = () => {
           setShowPunchModal(true);
         }}
         onViewPhoto={(photoData) => setPreviewPhotoData(photoData)}
+        onEditAttendance={(dayRecord) => handleOpenManualEntry(dayRecord)}
       />
 
       {/* Camera Punch Verification Modal */}
@@ -2037,6 +2085,18 @@ const AttendanceTracker = () => {
           photoData={previewPhotoData}
         />
       )}
+
+      {/* Manual Attendance Entry & Management Modal */}
+      <ManualAttendanceModal
+        show={showManualModal}
+        onHide={() => {
+          setShowManualModal(false);
+          setManualModalRecord(null);
+        }}
+        initialRecord={manualModalRecord}
+        defaultDate={selectedDate}
+        onSuccess={handleManualSuccess}
+      />
     </div>
   );
 };

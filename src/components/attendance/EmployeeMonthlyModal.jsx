@@ -9,7 +9,7 @@ import {
   FaUserTimes, FaExclamationTriangle, FaDoorOpen, FaCheckCircle, 
   FaFileDownload, FaSearch, FaChevronLeft, FaChevronRight, 
   FaBusinessTime, FaEye, FaTimesCircle, FaBuilding, FaUserTie,
-  FaMoneyBillWave, FaCamera
+  FaMoneyBillWave, FaCamera, FaEdit
 } from 'react-icons/fa';
 import api from '../../services/api';
 
@@ -18,7 +18,7 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches, onViewPhoto }) => {
+const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches, onViewPhoto, onEditAttendance }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -493,7 +493,7 @@ const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches, onViewPho
                   <th>System Off Time</th>
                   <th>Working Hours</th>
                   <th>Remarks / Comment</th>
-                  <th>Punches</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -709,31 +709,50 @@ const EmployeeMonthlyModal = ({ show, onHide, employee, onViewPunches, onViewPho
                       <small className="text-muted">{day.remarks}</small>
                     </td>
 
-                    {/* Punches Button */}
+                    {/* Actions: Punches & Edit */}
                     <td>
-                      {day.raw_punches && day.raw_punches.length > 0 ? (
-                        <Button 
-                          variant="outline-primary" 
-                          size="sm" 
-                          className="py-0 px-2"
-                          style={{ fontSize: '11px' }}
-                          onClick={() => {
-                            if (onViewPunches) {
-                              onViewPunches({
-                                ...day,
-                                name: attendanceData?.employee?.name || employee?.name,
-                                job_no: attendanceData?.employee?.employee_id || employee?.job_no,
-                                department: attendanceData?.employee?.department || employee?.department
-                              });
-                            }
-                          }}
-                        >
-                          <FaEye size={10} className="me-1" />
-                          <span>{day.raw_punches.length}</span>
-                        </Button>
-                      ) : (
-                        <span className="text-muted" style={{ fontSize: '11px' }}>--</span>
-                      )}
+                      <div className="d-flex align-items-center gap-1">
+                        {day.raw_punches && day.raw_punches.length > 0 && (
+                          <Button 
+                            variant="outline-primary" 
+                            size="sm" 
+                            className="py-0 px-2"
+                            style={{ fontSize: '11px' }}
+                            onClick={() => {
+                              if (onViewPunches) {
+                                onViewPunches({
+                                  ...day,
+                                  name: attendanceData?.employee?.name || employee?.name,
+                                  job_no: attendanceData?.employee?.employee_id || employee?.job_no,
+                                  department: attendanceData?.employee?.department || employee?.department
+                                });
+                              }
+                            }}
+                            title="View punch logs"
+                          >
+                            <FaEye size={10} className="me-1" />
+                            <span>{day.raw_punches.length}</span>
+                          </Button>
+                        )}
+                        {onEditAttendance && (
+                          <Button 
+                            variant="outline-warning" 
+                            size="sm" 
+                            className="py-0 px-2 d-flex align-items-center gap-1"
+                            style={{ fontSize: '11px' }}
+                            onClick={() => onEditAttendance({
+                              ...day,
+                              employee_id: attendanceData?.employee?.id || employee?.id || employee?.employee_id,
+                              job_no: attendanceData?.employee?.employee_id || employee?.job_no,
+                              name: attendanceData?.employee?.name || employee?.name
+                            })}
+                            title="Edit or regularize attendance for this day"
+                          >
+                            <FaEdit size={10} />
+                            <span>Edit</span>
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
