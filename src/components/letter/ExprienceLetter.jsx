@@ -90,19 +90,29 @@ export default function ExperienceCertificate({ data = {} }) {
               </span>.
             </p>
 
-            <p style={styles.paragraph}>
-              During the tenure with the organization, they were
-              responsible for designing, developing, and executing
-              key software components, maintaining high technical standards,
-              and collaborating proactively with cross-functional teams to
-              deliver superior digital solutions.
-            </p>
+            {data.body_content && data.body_content.trim() ? (
+              data.body_content.split(/\n\s*\n/).filter(p => p.trim()).map((para, idx) => (
+                <p key={idx} style={styles.paragraph}>
+                  {para.trim()}
+                </p>
+              ))
+            ) : (
+              <>
+                <p style={styles.paragraph}>
+                  During the tenure with the organization, they were
+                  responsible for designing, developing, and executing
+                  key software components, maintaining high technical standards,
+                  and collaborating proactively with cross-functional teams to
+                  deliver superior digital solutions.
+                </p>
 
-            <p style={styles.paragraph}>
-              They demonstrated exceptional professionalism, dedication,
-              technical prowess, and a collaborative team attitude throughout
-              their employment with the organization.
-            </p>
+                <p style={styles.paragraph}>
+                  They demonstrated exceptional professionalism, dedication,
+                  technical prowess, and a collaborative team attitude throughout
+                  their employment with the organization.
+                </p>
+              </>
+            )}
           </div>
 
           {/* EMPLOYMENT DETAILS */}

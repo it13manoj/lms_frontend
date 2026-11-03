@@ -9,7 +9,8 @@ import {
   FaBuilding, FaAward, FaCalendarAlt, FaMoneyBillWave,
   FaColumns, FaDesktop, FaTimes, FaLock, FaKey,
   FaEyeSlash, FaShieldAlt, FaPen, FaExclamationTriangle,
-  FaSave, FaUser, FaBriefcase, FaMapMarkerAlt, FaFileSignature
+  FaSave, FaUser, FaBriefcase, FaMapMarkerAlt, FaFileSignature,
+  FaUndo
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import letterService from '../../services/letterService';
@@ -18,6 +19,24 @@ import OfferLetter from './OfferLetter';
 import JoiningLetter from './JoiningLetter';
 import ExperienceCertificate from './ExprienceLetter';
 import './Letters.css';
+
+export const DEFAULT_BODY_TEMPLATES = {
+  experience: `During the tenure with the organization, they were responsible for designing, developing, and executing key software components, maintaining high technical standards, and collaborating proactively with cross-functional teams to deliver superior digital solutions.
+
+They demonstrated exceptional professionalism, dedication, technical prowess, and a collaborative team attitude throughout their employment with the organization.`,
+
+  offer: `In this role, you will be instrumental in delivering high-value technical and creative excellence across our web and mobile product platforms, maintaining superior code quality and collaborative teamwork.
+
+Your compensation and benefits will be structured as per company policies. You will receive detailed guidelines regarding your roles, operational workflows, and professional conduct upon orientation.
+
+We are confident that your expertise will be a phenomenal addition to ParakshTech LLP. Please sign a copy of this letter as formal acceptance of our offer.`,
+
+  joining: `1. Terms of Employment: You will be on probation for a period of three (3) months, following which your appointment will be confirmed subject to satisfactory performance.
+
+2. Working Hours & Code of Conduct: You are expected to adhere to standard company working hours, IT security guidelines, confidentiality non-disclosure agreements, and professional organizational standards.
+
+3. Onboarding Formalities: Kindly submit signed copies of your academic credentials, identity proofs, and previous employment relievings on or prior to your joining date.`
+};
 
 const INITIAL_FORM_STATE = {
   letter_type: 'offer',
@@ -36,6 +55,7 @@ const INITIAL_FORM_STATE = {
   signatory_name: 'Authorized Signatory',
   signatory_title: 'For ParakshTech LLP',
   custom_terms: '',
+  body_content: DEFAULT_BODY_TEMPLATES.offer,
   status: 'issued',
   include_signature: false,
   include_stamp: false,
@@ -175,6 +195,7 @@ export default function LetterList({ defaultType = 'all' }) {
     setFormData({
       ...INITIAL_FORM_STATE,
       letter_type: type,
+      body_content: DEFAULT_BODY_TEMPLATES[type] || '',
       include_signature: false,
       include_stamp: false,
       security_pin: ''
@@ -202,6 +223,7 @@ export default function LetterList({ defaultType = 'all' }) {
       signatory_name: letter.signatory_name || 'Authorized Signatory',
       signatory_title: letter.signatory_title || 'For ParakshTech LLP',
       custom_terms: letter.custom_terms || '',
+      body_content: letter.body_content !== undefined && letter.body_content !== null ? letter.body_content : (DEFAULT_BODY_TEMPLATES[letter.letter_type] || ''),
       status: letter.status || 'issued',
       include_signature: Boolean(letter.include_signature),
       include_stamp: Boolean(letter.include_stamp),
@@ -229,6 +251,7 @@ export default function LetterList({ defaultType = 'all' }) {
       signatory_name: letter.signatory_name || 'Authorized Signatory',
       signatory_title: letter.signatory_title || 'For ParakshTech LLP',
       custom_terms: letter.custom_terms || '',
+      body_content: letter.body_content !== undefined && letter.body_content !== null ? letter.body_content : (DEFAULT_BODY_TEMPLATES[letter.letter_type] || ''),
       include_signature: Boolean(letter.include_signature),
       include_stamp: Boolean(letter.include_stamp),
       security_pin: ''
@@ -258,13 +281,14 @@ export default function LetterList({ defaultType = 'all' }) {
       setPreviewSaving(true);
       const res = await letterService.updateLetter(previewLetter.id, previewFormData);
       if (res.success) {
-        toast.success('Letter details updated successfully');
+        toast.success('Complete letter details updated successfully');
         setPreviewLetter(res.data);
         setPreviewFormData({
           ...res.data,
           joining_date: res.data.joining_date ? res.data.joining_date.slice(0, 10) : '',
           end_date: res.data.end_date ? res.data.end_date.slice(0, 10) : '',
           issue_date: res.data.issue_date ? res.data.issue_date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+          body_content: res.data.body_content || previewFormData.body_content || '',
           include_signature: Boolean(res.data.include_signature),
           include_stamp: Boolean(res.data.include_stamp),
           security_pin: ''
@@ -600,10 +624,10 @@ export default function LetterList({ defaultType = 'all' }) {
         <div>
           <h3 className="fw-bold mb-1 d-flex align-items-center gap-2 text-dark">
             <FaFileAlt className="text-primary" />
-            <span>Letters & Certificates</span>
+            <span>Letters &amp; Certificates</span>
           </h3>
           <p className="text-muted mb-0 small">
-            Generate, customize, and issue official Offer Letters, Joining Letters, and Experience Certificates with live editable details & Security PIN authorization.
+            Generate, customize, and issue official Offer Letters, Joining Letters, and Experience Certificates with full letter body editing &amp; Security PIN authorization.
           </p>
         </div>
 
@@ -772,7 +796,7 @@ export default function LetterList({ defaultType = 'all' }) {
                     <th>Candidate / Employee</th>
                     <th>Position / Dept</th>
                     <th>Letter Type</th>
-                    <th>Stamp & Signature</th>
+                    <th>Stamp &amp; Signature</th>
                     <th>Joining Date</th>
                     <th>Compensation (CTC)</th>
                     <th>Issued Date</th>
@@ -812,7 +836,7 @@ export default function LetterList({ defaultType = 'all' }) {
                           {isSigned ? (
                             <Badge bg="success" className="d-inline-flex align-items-center gap-1 px-2 py-1">
                               <FaShieldAlt size={10} />
-                              <span>Signed & Stamped</span>
+                              <span>Signed &amp; Stamped</span>
                             </Badge>
                           ) : (
                             <Badge bg="secondary" className="d-inline-flex align-items-center gap-1 px-2 py-1">
@@ -859,7 +883,7 @@ export default function LetterList({ defaultType = 'all' }) {
                             <Button 
                               variant="outline-primary" 
                               size="sm" 
-                              title="View & Edit Letter Details"
+                              title="Complete Letter Editor & Live Preview"
                               className="p-1 px-2 d-flex align-items-center gap-1"
                               onClick={() => handleOpenPreview(letter, 'split')}
                             >
@@ -914,7 +938,7 @@ export default function LetterList({ defaultType = 'all' }) {
                   <span>{editingLetterId ? 'Edit Letter' : 'Generate New Official Letter'}</span>
                 </Modal.Title>
                 <Badge bg="primary-subtle" className="text-primary border border-primary-subtle d-none d-sm-inline">
-                  Editable Details Section
+                  Editable Complete Letter Panel
                 </Badge>
               </div>
 
@@ -952,7 +976,7 @@ export default function LetterList({ defaultType = 'all' }) {
 
           <Modal.Body className="p-0">
             <Row className="g-0">
-              {/* LEFT COLUMN: EDITABLE LETTER DETAILS SECTION */}
+              {/* LEFT COLUMN: EDITABLE COMPLETE LETTER PANEL */}
               {(generateViewMode === 'split' || generateViewMode === 'form') && (
                 <Col 
                   xs={12} 
@@ -962,9 +986,9 @@ export default function LetterList({ defaultType = 'all' }) {
                   <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
                     <h6 className="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
                       <FaEdit className="text-primary" />
-                      <span>Editable Letter Details</span>
+                      <span>Editable Complete Letter Panel</span>
                     </h6>
-                    <span className="text-muted small">Update any field to see live changes</span>
+                    <span className="text-muted small">Update any text to preview live</span>
                   </div>
 
                   {/* Section 0: Document Type & Auto-fill */}
@@ -984,7 +1008,13 @@ export default function LetterList({ defaultType = 'all' }) {
                           label="Offer Letter"
                           name="letter_type"
                           checked={formData.letter_type === 'offer'}
-                          onChange={() => setFormData({ ...formData, letter_type: 'offer' })}
+                          onChange={() => {
+                            setFormData({ 
+                              ...formData, 
+                              letter_type: 'offer',
+                              body_content: DEFAULT_BODY_TEMPLATES.offer
+                            });
+                          }}
                         />
                         <Form.Check 
                           type="radio"
@@ -992,7 +1022,13 @@ export default function LetterList({ defaultType = 'all' }) {
                           label="Joining Letter"
                           name="letter_type"
                           checked={formData.letter_type === 'joining'}
-                          onChange={() => setFormData({ ...formData, letter_type: 'joining' })}
+                          onChange={() => {
+                            setFormData({ 
+                              ...formData, 
+                              letter_type: 'joining',
+                              body_content: DEFAULT_BODY_TEMPLATES.joining
+                            });
+                          }}
                         />
                         <Form.Check 
                           type="radio"
@@ -1000,7 +1036,13 @@ export default function LetterList({ defaultType = 'all' }) {
                           label="Experience Certificate"
                           name="letter_type"
                           checked={formData.letter_type === 'experience'}
-                          onChange={() => setFormData({ ...formData, letter_type: 'experience' })}
+                          onChange={() => {
+                            setFormData({ 
+                              ...formData, 
+                              letter_type: 'experience',
+                              body_content: DEFAULT_BODY_TEMPLATES.experience
+                            });
+                          }}
                         />
                       </div>
 
@@ -1193,11 +1235,59 @@ export default function LetterList({ defaultType = 'all' }) {
                     </div>
                   </div>
 
-                  {/* Section 4: Signatory & Custom Terms */}
+                  {/* Section 4: Complete Letter Body Paragraphs (Editable) */}
+                  <div className="editable-section-card border-primary border-opacity-50 shadow-sm">
+                    <div className="editable-section-header bg-primary bg-opacity-10 justify-content-between">
+                      <div className="d-flex align-items-center gap-2 text-primary fw-bold">
+                        <FaFileAlt size={13} />
+                        <span>4. Complete Letter Body Paragraphs (Editable)</span>
+                      </div>
+                      <Button 
+                        variant="outline-primary" 
+                        size="sm" 
+                        className="py-0 px-2"
+                        style={{ fontSize: '11px' }}
+                        onClick={() => {
+                          const defaultText = DEFAULT_BODY_TEMPLATES[formData.letter_type] || '';
+                          setFormData(prev => ({ ...prev, body_content: defaultText }));
+                          toast.info('Loaded standard template paragraphs');
+                        }}
+                      >
+                        <FaUndo className="me-1" size={10} />
+                        Reset to Standard Text
+                      </Button>
+                    </div>
+                    <div className="editable-section-body">
+                      <Form.Group>
+                        <div className="d-flex justify-content-between align-items-center mb-1">
+                          <Form.Label className="small fw-bold text-dark mb-0">
+                            Custom Letter Body Content:
+                          </Form.Label>
+                          <span className="text-muted small" style={{ fontSize: '11px' }}>
+                            Separate paragraphs by a blank line
+                          </span>
+                        </div>
+                        <Form.Control 
+                          as="textarea"
+                          rows={6}
+                          className="font-monospace small"
+                          placeholder="Type or edit the complete letter body paragraphs here..."
+                          value={formData.body_content || ''}
+                          onChange={(e) => setFormData({ ...formData, body_content: e.target.value })}
+                        />
+                        <div className="d-flex justify-content-between align-items-center mt-1 text-muted" style={{ fontSize: '11px' }}>
+                          <span>These paragraphs are rendered in the letter body in real time.</span>
+                          <span>{(formData.body_content || '').length} chars</span>
+                        </div>
+                      </Form.Group>
+                    </div>
+                  </div>
+
+                  {/* Section 5: Signatory & Custom Terms */}
                   <div className="editable-section-card">
                     <div className="editable-section-header">
                       <FaFileSignature className="text-primary" size={13} />
-                      <span>4. Signatory &amp; Custom Terms</span>
+                      <span>5. Signatory &amp; Custom Terms</span>
                     </div>
                     <div className="editable-section-body">
                       <Row className="g-2">
@@ -1240,12 +1330,12 @@ export default function LetterList({ defaultType = 'all' }) {
                     </div>
                   </div>
 
-                  {/* Section 5: Security & Digital Signature Authorization */}
+                  {/* Section 6: Security & Digital Signature Authorization */}
                   <div className="editable-section-card">
                     <div className="editable-section-header justify-content-between">
                       <div className="d-flex align-items-center gap-2">
                         <FaLock className="text-primary" size={13} />
-                        <span>5. Official Seal &amp; Digital Signature Security</span>
+                        <span>6. Official Seal &amp; Digital Signature Security</span>
                       </div>
                       {isPinConfigured ? (
                         <Badge bg="success" className="py-1 px-2 small">
@@ -1563,7 +1653,7 @@ export default function LetterList({ defaultType = 'all' }) {
 
         <Modal.Body className="p-0">
           <Row className="g-0">
-            {/* EDITABLE LETTER DETAILS SECTION */}
+            {/* EDITABLE COMPLETE LETTER PANEL */}
             {(previewViewMode === 'split' || previewViewMode === 'details') && previewFormData && (
               <Col 
                 xs={12} 
@@ -1580,9 +1670,9 @@ export default function LetterList({ defaultType = 'all' }) {
                   <div>
                     <h6 className="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
                       <FaEdit className="text-primary" />
-                      <span>Editable Letter Details Section</span>
+                      <span>Editable Complete Letter Panel</span>
                     </h6>
-                    <span className="text-muted small">Edit any field below to update this document in real time</span>
+                    <span className="text-muted small">Edit candidate, role, dates, or body paragraphs live</span>
                   </div>
                   <Button 
                     variant="primary" 
@@ -1756,6 +1846,54 @@ export default function LetterList({ defaultType = 'all' }) {
                         </Form.Group>
                       </Col>
                     </Row>
+                  </div>
+                </div>
+
+                {/* EDITABLE COMPLETE LETTER BODY PARAGRAPHS */}
+                <div className="editable-section-card border-primary border-opacity-50 shadow-sm">
+                  <div className="editable-section-header bg-primary bg-opacity-10 justify-content-between">
+                    <div className="d-flex align-items-center gap-2 text-primary fw-bold">
+                      <FaFileAlt size={13} />
+                      <span>Complete Letter Body Paragraphs (Editable)</span>
+                    </div>
+                    <Button 
+                      variant="outline-primary" 
+                      size="sm" 
+                      className="py-0 px-2"
+                      style={{ fontSize: '11px' }}
+                      onClick={() => {
+                        const defaultText = DEFAULT_BODY_TEMPLATES[previewLetter?.letter_type || 'experience'] || '';
+                        setPreviewFormData(prev => ({ ...prev, body_content: defaultText }));
+                        toast.info('Loaded standard template paragraphs');
+                      }}
+                    >
+                      <FaUndo className="me-1" size={10} />
+                      Reset to Standard Text
+                    </Button>
+                  </div>
+                  <div className="editable-section-body">
+                    <Form.Group>
+                      <div className="d-flex justify-content-between align-items-center mb-1">
+                        <Form.Label className="small fw-bold text-dark mb-0">
+                          Letter Body Paragraphs (Live Editable):
+                        </Form.Label>
+                        <span className="text-muted small" style={{ fontSize: '11px' }}>
+                          Separate paragraphs by a blank line
+                        </span>
+                      </div>
+                      <Form.Control 
+                        as="textarea"
+                        rows={7}
+                        className="font-monospace small"
+                        placeholder="Type or edit the complete letter body paragraphs here..."
+                        value={previewFormData.body_content || ''}
+                        onChange={(e) => setPreviewFormData({ ...previewFormData, body_content: e.target.value })}
+                      />
+                      <div className="d-flex justify-content-between align-items-center mt-1 text-muted" style={{ fontSize: '11px' }}>
+                        <span>Changes render live in the document on the right.</span>
+                        <span>{(previewFormData.body_content || '').length} characters</span>
+                      </div>
+                    </Form.Group>
                   </div>
                 </div>
 

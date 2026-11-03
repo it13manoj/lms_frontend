@@ -109,9 +109,17 @@ export default function JoiningLetter({ data = {} }) {
                 </table>
 
                 <div style={{ fontSize: '13px', lineHeight: 1.55 }}>
-                  <p style={{ margin: '6px 0' }}><strong>1. Terms of Employment:</strong> You will be on probation for a period of three (3) months, following which your appointment will be confirmed subject to satisfactory performance.</p>
-                  <p style={{ margin: '6px 0' }}><strong>2. Working Hours & Code of Conduct:</strong> You are expected to adhere to standard company working hours, IT security guidelines, confidentiality non-disclosure agreements, and professional organizational standards.</p>
-                  <p style={{ margin: '6px 0' }}><strong>3. Onboarding Formalities:</strong> Kindly submit signed copies of your academic credentials, identity proofs, and previous employment relievings on or prior to your joining date.</p>
+                  {data.body_content && data.body_content.trim() ? (
+                    data.body_content.split(/\n\s*\n/).filter(p => p.trim()).map((para, idx) => (
+                      <p key={idx} style={{ margin: '6px 0' }}>{para.trim()}</p>
+                    ))
+                  ) : (
+                    <>
+                      <p style={{ margin: '6px 0' }}><strong>1. Terms of Employment:</strong> You will be on probation for a period of three (3) months, following which your appointment will be confirmed subject to satisfactory performance.</p>
+                      <p style={{ margin: '6px 0' }}><strong>2. Working Hours & Code of Conduct:</strong> You are expected to adhere to standard company working hours, IT security guidelines, confidentiality non-disclosure agreements, and professional organizational standards.</p>
+                      <p style={{ margin: '6px 0' }}><strong>3. Onboarding Formalities:</strong> Kindly submit signed copies of your academic credentials, identity proofs, and previous employment relievings on or prior to your joining date.</p>
+                    </>
+                  )}
                   {customTerms && (
                     <p style={{ margin: '6px 0' }}><strong>4. Special Conditions:</strong> {customTerms}</p>
                   )}

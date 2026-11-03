@@ -77,7 +77,13 @@ export default function OfferLetter({ data = {} }) {
               <div style={styles.contentBody}>
                 <p>Dear <strong>{candidateName}</strong>,</p>
                 <p>We are thrilled to formally offer you the position of <strong>{position}</strong> at <strong>ParakshTech LLP</strong>, located at Pushtakalya Road, Buxar, Bihar. Your employment commences effective <strong>{joiningDateFormatted}</strong>.</p>
-                <p>In this role, you will be instrumental in delivering high-value technical and creative excellence across our web and mobile product platforms, maintaining superior code quality and collaborative teamwork.</p>
+                {data.body_content && data.body_content.trim() ? (
+                  data.body_content.split(/\n\s*\n/).filter(p => p.trim()).map((para, idx) => (
+                    <p key={idx}>{para.trim()}</p>
+                  ))
+                ) : (
+                  <p>In this role, you will be instrumental in delivering high-value technical and creative excellence across our web and mobile product platforms, maintaining superior code quality and collaborative teamwork.</p>
+                )}
                 
                 <table style={styles.detailsTable}>
                   <tbody>
