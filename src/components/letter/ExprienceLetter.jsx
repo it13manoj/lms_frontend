@@ -160,17 +160,14 @@ export default function ExperienceCertificate({ data = {} }) {
           {/* AUTHORIZED SIGNATORY & OFFICIAL STAMP */}
           <div style={styles.signatureArea}>
             <div style={styles.stampBlock}>
-              {hasStamp ? (
+              {hasStamp && (
                 <img
                   src={stampImg}
                   alt="ParakshTech LLP Stamp"
                   style={styles.stampImg}
                   onError={(e) => { e.target.src = '/stamp.png'; }}
                 />
-              ) : (
-                <div style={{ height: '58px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
               )}
-              <div style={styles.stampText}>Official Seal</div>
             </div>
 
             <div style={styles.signature}>
@@ -384,6 +381,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'flex-end',
     width: '120px',
+    height: '62px',
   },
   stampImg: {
     maxHeight: '62px',
