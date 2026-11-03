@@ -1,4 +1,7 @@
 import React from 'react';
+import companyLogo from '../../assets/parakshtech_logo.jpg';
+import signatureImg from '../../assets/signature.png';
+import stampImg from '../../assets/stamp.png';
 
 const formatDisplayDate = (dStr) => {
   if (!dStr) return 'February 01, 2026';
@@ -37,7 +40,7 @@ export default function JoiningLetter({ data = {} }) {
                 <tbody>
                   <tr>
                     <td style={styles.logoCell}>
-                      <img src="/logo.jpeg" alt="Logo" style={styles.logoImg} onError={(e) => { e.target.src = '/parakshtech_logo.jpg'; }} />
+                      <img src={companyLogo} alt="Logo" style={styles.logoImg} onError={(e) => { e.target.src = '/logo.jpeg'; }} />
                     </td>
                     <td style={styles.companyCell}>
                       <div style={styles.companyName}>ParakshTech LLP</div>
@@ -123,8 +126,34 @@ export default function JoiningLetter({ data = {} }) {
                   <tr>
                     <td style={styles.sigTdLeft}>
                       <div style={styles.sigBox}>
-                        <div style={styles.sigImgContainer}>
-                          <img src="/logo.jpeg" alt="Seal" style={{ height: '35px', opacity: 0.15 }} />
+                        <div style={{ ...styles.sigImgContainer, position: 'relative', height: '46px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+                          <img
+                            src={stampImg}
+                            alt="Stamp"
+                            style={{
+                              position: 'absolute',
+                              left: '-10px',
+                              bottom: '-6px',
+                              maxHeight: '48px',
+                              maxWidth: '85px',
+                              opacity: 0.7,
+                              pointerEvents: 'none',
+                              objectFit: 'contain',
+                            }}
+                            onError={(e) => { e.target.src = '/stamp.png'; }}
+                          />
+                          <img
+                            src={signatureImg}
+                            alt="Authorized Signature"
+                            style={{
+                              maxHeight: '42px',
+                              maxWidth: '160px',
+                              objectFit: 'contain',
+                              position: 'relative',
+                              zIndex: 2,
+                            }}
+                            onError={(e) => { e.target.src = '/signature.png'; }}
+                          />
                         </div>
                         <div style={styles.sigLine}>{signatoryName}</div>
                         <div style={styles.sigTitle}>{signatoryTitle}</div>

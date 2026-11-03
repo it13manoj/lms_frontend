@@ -1,4 +1,7 @@
 import React from 'react';
+import companyLogo from '../../assets/parakshtech_logo.jpg';
+import signatureImg from '../../assets/signature.png';
+import stampImg from '../../assets/stamp.png';
 
 const formatDisplayDate = (dStr) => {
   if (!dStr) return '01 February 2026';
@@ -37,10 +40,10 @@ export default function ExperienceCertificate({ data = {} }) {
             <div style={styles.brandRow}>
               {/* COMPANY LOGO */}
               <img
-                src="/logo.jpeg"
+                src={companyLogo}
                 alt="Parakshtech LLP Logo"
                 style={styles.logo}
-                onError={(e) => { e.target.src = '/parakshtech_logo.jpg'; }}
+                onError={(e) => { e.target.src = '/logo.jpeg'; }}
               />
 
               {/* COMPANY NAME */}
@@ -142,15 +145,25 @@ export default function ExperienceCertificate({ data = {} }) {
             </p>
           </div>
 
-          {/* AUTHORIZED SIGNATORY */}
+          {/* AUTHORIZED SIGNATORY & OFFICIAL STAMP */}
           <div style={styles.signatureArea}>
+            <div style={styles.stampBlock}>
+              <img
+                src={stampImg}
+                alt="ParakshTech LLP Stamp"
+                style={styles.stampImg}
+                onError={(e) => { e.target.src = '/stamp.png'; }}
+              />
+              <div style={styles.stampText}>Official Seal</div>
+            </div>
+
             <div style={styles.signature}>
-              <div style={{ height: '35px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={styles.signatureImgWrapper}>
                 <img
-                  src="/logo.jpeg"
-                  alt="Seal"
-                  style={{ height: '32px', opacity: 0.2 }}
-                  onError={(e) => { e.target.src = '/parakshtech_logo.jpg'; }}
+                  src={signatureImg}
+                  alt="Authorized Signatory"
+                  style={styles.signatureImg}
+                  onError={(e) => { e.target.src = '/signature.png'; }}
                 />
               </div>
               <div style={styles.signatureLine} />
@@ -340,19 +353,53 @@ const styles = {
   },
   signatureArea: {
     display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginTop: '8px',
+    padding: '0 20px',
+  },
+  stampBlock: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
     justifyContent: 'flex-end',
-    marginTop: '10px',
-    paddingRight: '15px',
+    width: '120px',
+  },
+  stampImg: {
+    maxHeight: '62px',
+    maxWidth: '115px',
+    objectFit: 'contain',
+    filter: 'contrast(1.05)',
+  },
+  stampText: {
+    fontSize: '9px',
+    fontWeight: 'bold',
+    color: '#6b7280',
+    letterSpacing: '0.8px',
+    textTransform: 'uppercase',
+    marginTop: '3px',
   },
   signature: {
     textAlign: 'center',
-    width: '180px',
+    width: '190px',
+  },
+  signatureImgWrapper: {
+    height: '46px',
+    display: 'flex',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    marginBottom: '2px',
+  },
+  signatureImg: {
+    maxHeight: '44px',
+    maxWidth: '180px',
+    objectFit: 'contain',
   },
   signatureLine: {
     width: '100%',
-    height: '1px',
-    backgroundColor: '#111827',
-    margin: '5px auto 4px auto',
+    height: '1.5px',
+    backgroundColor: '#1f3a5f',
+    margin: '3px auto 4px auto',
   },
   authorized: {
     fontSize: '12px',
