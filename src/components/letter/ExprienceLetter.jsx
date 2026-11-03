@@ -23,6 +23,8 @@ export default function ExperienceCertificate({ data = {} }) {
   const signatoryTitle = data.signatory_title || 'Parakshtech LLP';
   const signatoryName = data.signatory_name || 'Authorized Signatory';
   const customTerms = data.custom_terms;
+  const hasSignature = Boolean(data.include_signature);
+  const hasStamp = Boolean(data.include_stamp);
 
   return (
     <div className="printable-letter-container" style={styles.outerWrapper}>
@@ -148,23 +150,31 @@ export default function ExperienceCertificate({ data = {} }) {
           {/* AUTHORIZED SIGNATORY & OFFICIAL STAMP */}
           <div style={styles.signatureArea}>
             <div style={styles.stampBlock}>
-              <img
-                src={stampImg}
-                alt="ParakshTech LLP Stamp"
-                style={styles.stampImg}
-                onError={(e) => { e.target.src = '/stamp.png'; }}
-              />
+              {hasStamp ? (
+                <img
+                  src={stampImg}
+                  alt="ParakshTech LLP Stamp"
+                  style={styles.stampImg}
+                  onError={(e) => { e.target.src = '/stamp.png'; }}
+                />
+              ) : (
+                <div style={{ height: '58px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
+              )}
               <div style={styles.stampText}>Official Seal</div>
             </div>
 
             <div style={styles.signature}>
               <div style={styles.signatureImgWrapper}>
-                <img
-                  src={signatureImg}
-                  alt="Authorized Signatory"
-                  style={styles.signatureImg}
-                  onError={(e) => { e.target.src = '/signature.png'; }}
-                />
+                {hasSignature ? (
+                  <img
+                    src={signatureImg}
+                    alt="Authorized Signatory"
+                    style={styles.signatureImg}
+                    onError={(e) => { e.target.src = '/signature.png'; }}
+                  />
+                ) : (
+                  <div style={{ height: '44px' }} />
+                )}
               </div>
               <div style={styles.signatureLine} />
               <div style={styles.authorized}>

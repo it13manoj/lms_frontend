@@ -7,7 +7,8 @@ import {
   FaFileAlt, FaPlus, FaPrint, FaSearch, FaFilter, 
   FaTrash, FaEdit, FaEye, FaUserTie, FaCheckCircle, 
   FaBuilding, FaAward, FaCalendarAlt, FaMoneyBillWave,
-  FaColumns, FaDesktop, FaTimes 
+  FaColumns, FaDesktop, FaTimes, FaLock, FaKey,
+  FaEyeSlash, FaShieldAlt, FaPen, FaExclamationTriangle
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import letterService from '../../services/letterService';
@@ -34,7 +35,10 @@ const INITIAL_FORM_STATE = {
   signatory_name: 'Authorized Signatory',
   signatory_title: 'For ParakshTech LLP',
   custom_terms: '',
-  status: 'issued'
+  status: 'issued',
+  include_signature: false,
+  include_stamp: false,
+  security_pin: ''
 };
 
 export default function LetterList({ defaultType = 'all' }) {
@@ -55,11 +59,40 @@ export default function LetterList({ defaultType = 'all' }) {
   const [submitting, setSubmitting] = useState(false);
   const [generateViewMode, setGenerateViewMode] = useState('split'); // 'split' | 'form' | 'preview'
   const [generateZoom, setGenerateZoom] = useState(0.78);
+  const [showFormPin, setShowFormPin] = useState(false);
 
   // Preview Modal State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewLetter, setPreviewLetter] = useState(null);
   const [previewModalZoom, setPreviewModalZoom] = useState(1.0);
+
+  // Security PIN Configuration Modal State
+  const [isPinConfigured, setIsPinConfigured] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinForm, setPinForm] = useState({ currentPin: '', newPin: '', confirmPin: '' });
+  const [pinLoading, setPinLoading] = useState(false);
+  const [showPinCurrent, setShowPinCurrent] = useState(false);
+  const [showPinNew, setShowPinNew] = useState(false);
+  const [showPinConfirm, setShowPinConfirm] = useState(false);
+
+  // Quick Authorize Modal State (for existing letters in table or preview)
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authLetterTarget, setAuthLetterTarget] = useState(null);
+  const [authPin, setAuthPin] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [showAuthPin, setShowAuthPin] = useState(false);
+
+  // Check Security PIN status
+  const checkPinStatus = async () => {
+    try {
+      const res = await letterService.getPinStatus();
+      if (res && res.success && res.data) {
+        setIsPinConfigured(Boolean(res.data.isConfigured));
+      }
+    } catch (err) {
+      console.warn('Could not check Security PIN status:', err);
+    }
+  };
 
   // Load Letters
   const loadLetters = async () => {
@@ -100,6 +133,7 @@ export default function LetterList({ defaultType = 'all' }) {
   useEffect(() => {
     loadLetters();
     loadEmployeesDropdown();
+    checkPinStatus();
   }, [selectedTypeFilter]);
 
   const handleSearchSubmit = (e) => {
@@ -135,7 +169,10 @@ export default function LetterList({ defaultType = 'all' }) {
     setEditingLetterId(null);
     setFormData({
       ...INITIAL_FORM_STATE,
-      letter_type: type
+      letter_type: type,
+      include_signature: false,
+      include_stamp: false,
+      security_pin: ''
     });
     setShowFormModal(true);
   };
@@ -160,7 +197,10 @@ export default function LetterList({ defaultType = 'all' }) {
       signatory_name: letter.signatory_name || 'Authorized Signatory',
       signatory_title: letter.signatory_title || 'For ParakshTech LLP',
       custom_terms: letter.custom_terms || '',
-      status: letter.status || 'issued'
+      status: letter.status || 'issued',
+      include_signature: Boolean(letter.include_signature),
+      include_stamp: Boolean(letter.include_stamp),
+      security_pin: ''
     });
     setShowFormModal(true);
   };
@@ -171,6 +211,24 @@ export default function LetterList({ defaultType = 'all' }) {
     if (!formData.candidate_name || !formData.position || !formData.joining_date) {
       toast.error('Please enter candidate name, position, and joining date');
       return;
+    }
+
+    const wantSignature = Boolean(formData.include_signature || formData.include_stamp);
+    if (wantSignature) {
+      if (!isPinConfigured) {
+        toast.error('Security PIN has not been configured yet. Please configure the Security PIN first.');
+        setShowPinModal(true);
+        return;
+      }
+      
+      const isNewlyEnabling = editingLetterId 
+        ? (!letters.find(l => l.id === editingLetterId)?.include_signature && formData.include_signature)
+        : true;
+
+      if (isNewlyEnabling && !formData.security_pin) {
+        toast.error('Please enter your Security PIN to authorize digital stamp and signature');
+        return;
+      }
     }
 
     try {
@@ -188,7 +246,6 @@ export default function LetterList({ defaultType = 'all' }) {
           toast.success('Letter generated successfully');
           setShowFormModal(false);
           loadLetters();
-          // Directly open preview for the newly generated letter
           setPreviewLetter(res.data);
           setShowPreviewModal(true);
         }
@@ -198,6 +255,105 @@ export default function LetterList({ defaultType = 'all' }) {
       toast.error(err.response?.data?.message || 'Failed to save letter');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Submit Security PIN Configuration
+  const handleConfigurePinSubmit = async (e) => {
+    e.preventDefault();
+    const newPinTrimmed = (pinForm.newPin || '').trim();
+    if (newPinTrimmed.length < 4 || newPinTrimmed.length > 8) {
+      toast.error('New PIN must be between 4 and 8 digits');
+      return;
+    }
+    if (newPinTrimmed !== (pinForm.confirmPin || '').trim()) {
+      toast.error('New PIN and Confirm PIN do not match');
+      return;
+    }
+    if (isPinConfigured && !pinForm.currentPin) {
+      toast.error('Please enter your Current Security PIN');
+      return;
+    }
+
+    try {
+      setPinLoading(true);
+      const res = await letterService.configurePin({
+        currentPin: pinForm.currentPin,
+        newPin: newPinTrimmed
+      });
+      if (res.success) {
+        toast.success(res.message || 'Security PIN configured successfully');
+        setIsPinConfigured(true);
+        setShowPinModal(false);
+        setPinForm({ currentPin: '', newPin: '', confirmPin: '' });
+      }
+    } catch (err) {
+      console.error('Failed to configure PIN:', err);
+      toast.error(err.response?.data?.message || 'Failed to configure Security PIN');
+    } finally {
+      setPinLoading(false);
+    }
+  };
+
+  // Open Quick Authorize Modal
+  const handleOpenAuthModal = (letter) => {
+    if (!isPinConfigured) {
+      toast.info('Security PIN is not configured yet. Please configure it first.');
+      setShowPinModal(true);
+      return;
+    }
+    setAuthLetterTarget(letter);
+    setAuthPin('');
+    setShowAuthModal(true);
+  };
+
+  // Submit Quick Authorize
+  const handleAuthorizeSubmit = async (e) => {
+    e.preventDefault();
+    if (!authPin) {
+      toast.error('Please enter Security PIN');
+      return;
+    }
+    if (!authLetterTarget) return;
+
+    try {
+      setAuthLoading(true);
+      const res = await letterService.authorizeSignature(authLetterTarget.id, {
+        security_pin: authPin,
+        enable: true
+      });
+      if (res.success) {
+        toast.success('Official stamp and signature authorized successfully!');
+        setShowAuthModal(false);
+        setAuthPin('');
+        loadLetters();
+        if (previewLetter && previewLetter.id === authLetterTarget.id) {
+          setPreviewLetter(res.data);
+        }
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Authorization failed: Invalid Security PIN');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // Revoke Authorization
+  const handleRevokeAuth = async (letter) => {
+    if (!window.confirm(`Revoke official stamp and signature from ${letter.reference_no}?`)) return;
+    try {
+      const res = await letterService.authorizeSignature(letter.id, {
+        enable: false
+      });
+      if (res.success) {
+        toast.success('Stamp and signature revoked from letter');
+        loadLetters();
+        if (previewLetter && previewLetter.id === letter.id) {
+          setPreviewLetter(res.data);
+        }
+      }
+    } catch (err) {
+      toast.error('Failed to revoke signature');
     }
   };
 
@@ -215,7 +371,7 @@ export default function LetterList({ defaultType = 'all' }) {
     }
   };
 
-  // Print Action - Isolated iframe print with full fidelity and no white page
+  // Print Action - Isolated iframe print with full fidelity
   const handlePrintLetter = () => {
     const printArea = document.querySelector('.letter-preview-print-area');
     if (!printArea) {
@@ -223,7 +379,6 @@ export default function LetterList({ defaultType = 'all' }) {
       return;
     }
 
-    // Clean up any previously appended print iframe
     const oldIframe = document.getElementById('letter-print-iframe');
     if (oldIframe) {
       oldIframe.remove();
@@ -299,10 +454,9 @@ export default function LetterList({ defaultType = 'all' }) {
       }, 2000);
     };
 
-    // Wait for images (company logo, seal, etc.) to load before printing
     const imgs = pri.document.images;
     if (!imgs || imgs.length === 0) {
-      setTimeout(doPrint, 200);
+      setTimeout(doPrint, 250);
     } else {
       let loaded = 0;
       let completed = false;
@@ -310,23 +464,28 @@ export default function LetterList({ defaultType = 'all' }) {
         loaded++;
         if (loaded >= imgs.length && !completed) {
           completed = true;
-          setTimeout(doPrint, 150);
+          setTimeout(doPrint, 250);
         }
       };
       for (let i = 0; i < imgs.length; i++) {
         if (imgs[i].complete) {
-          onImageLoaded();
+          loaded++;
         } else {
           imgs[i].onload = onImageLoaded;
           imgs[i].onerror = onImageLoaded;
         }
       }
-      setTimeout(() => {
-        if (!completed) {
-          completed = true;
-          doPrint();
-        }
-      }, 700);
+      if (loaded >= imgs.length && !completed) {
+        completed = true;
+        setTimeout(doPrint, 250);
+      } else {
+        setTimeout(() => {
+          if (!completed) {
+            completed = true;
+            doPrint();
+          }
+        }, 1200);
+      }
     }
   };
 
@@ -354,11 +513,24 @@ export default function LetterList({ defaultType = 'all' }) {
             <span>Letters & Certificates</span>
           </h3>
           <p className="text-muted mb-0 small">
-            Generate, customize, and issue official Offer Letters, Joining Letters, and Experience Certificates.
+            Generate, customize, and issue official Offer Letters, Joining Letters, and Experience Certificates with Security PIN protection.
           </p>
         </div>
 
-        <div className="d-flex gap-2">
+        <div className="d-flex flex-wrap gap-2">
+          {/* Security PIN Settings Button */}
+          <Button 
+            variant={isPinConfigured ? "outline-primary" : "outline-warning"} 
+            className="d-flex align-items-center gap-2 shadow-sm"
+            onClick={() => {
+              setPinForm({ currentPin: '', newPin: '', confirmPin: '' });
+              setShowPinModal(true);
+            }}
+          >
+            <FaKey size={13} />
+            <span>{isPinConfigured ? 'Change Security PIN' : 'Configure Security PIN'}</span>
+          </Button>
+
           <Button 
             variant="primary" 
             className="d-flex align-items-center gap-2 shadow-sm"
@@ -429,44 +601,44 @@ export default function LetterList({ defaultType = 'all' }) {
         </Col>
       </Row>
 
-      {/* Filter Tabs and Search Toolbar */}
-      <Card className="letter-table-card mb-4 no-print">
+      {/* Filter and Search Bar */}
+      <Card className="border-0 shadow-sm mb-4 no-print">
         <Card.Body className="p-3">
           <div className="d-flex flex-wrap justify-content-between align-items-center gap-3">
-            {/* Filter Tabs */}
-            <div className="btn-group btn-group-sm">
+            <div className="d-flex flex-wrap gap-2">
               <Button 
-                variant={selectedTypeFilter === 'all' ? 'primary' : 'outline-secondary'}
+                variant={selectedTypeFilter === 'all' ? 'primary' : 'outline-secondary'} 
+                size="sm"
                 onClick={() => setSelectedTypeFilter('all')}
               >
-                All Letters
+                All Documents
               </Button>
               <Button 
-                variant={selectedTypeFilter === 'offer' ? 'primary' : 'outline-secondary'}
+                variant={selectedTypeFilter === 'offer' ? 'danger' : 'outline-secondary'} 
+                size="sm"
                 onClick={() => setSelectedTypeFilter('offer')}
               >
                 Offer Letters
               </Button>
               <Button 
-                variant={selectedTypeFilter === 'joining' ? 'primary' : 'outline-secondary'}
+                variant={selectedTypeFilter === 'joining' ? 'primary' : 'outline-secondary'} 
+                size="sm"
                 onClick={() => setSelectedTypeFilter('joining')}
               >
                 Joining Letters
               </Button>
               <Button 
-                variant={selectedTypeFilter === 'experience' ? 'primary' : 'outline-secondary'}
+                variant={selectedTypeFilter === 'experience' ? 'warning' : 'outline-secondary'} 
+                size="sm"
                 onClick={() => setSelectedTypeFilter('experience')}
               >
                 Experience Certificates
               </Button>
             </div>
 
-            {/* Search Input */}
-            <Form onSubmit={handleSearchSubmit} className="d-flex gap-2" style={{ maxWidth: '350px' }}>
-              <InputGroup size="sm">
-                <InputGroup.Text className="bg-white">
-                  <FaSearch className="text-muted" />
-                </InputGroup.Text>
+            <Form onSubmit={handleSearchSubmit} className="d-flex gap-2">
+              <InputGroup size="sm" style={{ width: '280px' }}>
+                <InputGroup.Text><FaSearch /></InputGroup.Text>
                 <Form.Control
                   type="text"
                   placeholder="Search candidate, role, ref no..."
@@ -510,6 +682,7 @@ export default function LetterList({ defaultType = 'all' }) {
                     <th>Candidate / Employee</th>
                     <th>Position / Dept</th>
                     <th>Letter Type</th>
+                    <th>Stamp & Signature</th>
                     <th>Joining Date</th>
                     <th>Compensation (CTC)</th>
                     <th>Issued Date</th>
@@ -517,78 +690,117 @@ export default function LetterList({ defaultType = 'all' }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {letters.map((letter) => (
-                    <tr key={letter.id}>
-                      <td className="fw-semibold text-primary small">
-                        {letter.reference_no}
-                      </td>
-                      <td>
-                        <div className="fw-semibold text-dark">{letter.candidate_name}</div>
-                        {letter.candidate_email && (
-                          <div className="text-muted small" style={{ fontSize: '11px' }}>{letter.candidate_email}</div>
-                        )}
-                      </td>
-                      <td>
-                        <div className="fw-semibold">{letter.position}</div>
-                        <div className="text-muted small" style={{ fontSize: '11px' }}>{letter.department || 'Technology'}</div>
-                      </td>
-                      <td>
-                        <span className={`badge px-2 py-1 rounded-pill ${
-                          letter.letter_type === 'joining' 
-                            ? 'letter-type-badge-joining' 
-                            : (letter.letter_type === 'experience' 
-                              ? 'letter-type-badge-experience' 
-                              : 'letter-type-badge-offer')
-                        }`}>
-                          {letter.letter_type === 'joining' ? 'Joining Letter' : (letter.letter_type === 'experience' ? 'Experience Certificate' : 'Offer Letter')}
-                        </span>
-                      </td>
-                      <td className="small text-muted">
-                        {letter.joining_date}
-                      </td>
-                      <td className="small fw-semibold text-dark">
-                        {letter.annual_ctc || '—'}
-                      </td>
-                      <td className="small text-muted">
-                        {letter.issue_date}
-                      </td>
-                      <td className="text-end">
-                        <div className="d-flex justify-content-end gap-1">
-                          <Button 
-                            variant="outline-primary" 
-                            size="sm" 
-                            title="Preview and Print Letter"
-                            className="p-1 px-2"
-                            onClick={() => {
-                              setPreviewLetter(letter);
-                              setShowPreviewModal(true);
-                            }}
-                          >
-                            <FaEye size={12} className="me-1" />
-                            <span>View</span>
-                          </Button>
-                          <Button 
-                            variant="outline-secondary" 
-                            size="sm" 
-                            title="Edit Letter Data"
-                            className="p-1 px-2"
-                            onClick={() => handleOpenEditModal(letter)}
-                          >
-                            <FaEdit size={12} />
-                          </Button>
-                          <Button 
-                            variant="outline-danger" 
-                            size="sm" 
-                            title="Delete"
-                            className="p-1 px-2"
-                            onClick={() => handleDeleteLetter(letter.id, letter.reference_no)}
-                          >
-                            <FaTrash size={12} />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {letters.map((letter) => {
+                    const isSigned = Boolean(letter.include_signature && letter.include_stamp);
+                    return (
+                      <tr key={letter.id}>
+                        <td className="fw-semibold text-primary small">
+                          {letter.reference_no}
+                        </td>
+                        <td>
+                          <div className="fw-semibold text-dark">{letter.candidate_name}</div>
+                          {letter.candidate_email && (
+                            <div className="text-muted small" style={{ fontSize: '11px' }}>{letter.candidate_email}</div>
+                          )}
+                        </td>
+                        <td>
+                          <div className="fw-semibold">{letter.position}</div>
+                          <div className="text-muted small" style={{ fontSize: '11px' }}>{letter.department || 'Technology'}</div>
+                        </td>
+                        <td>
+                          <span className={`badge px-2 py-1 rounded-pill ${
+                            letter.letter_type === 'joining' 
+                              ? 'letter-type-badge-joining' 
+                              : (letter.letter_type === 'experience' 
+                                ? 'letter-type-badge-experience' 
+                                : 'letter-type-badge-offer')
+                          }`}>
+                            {letter.letter_type === 'joining' ? 'Joining Letter' : (letter.letter_type === 'experience' ? 'Experience Certificate' : 'Offer Letter')}
+                          </span>
+                        </td>
+                        <td>
+                          {isSigned ? (
+                            <Badge bg="success" className="d-inline-flex align-items-center gap-1 px-2 py-1">
+                              <FaShieldAlt size={10} />
+                              <span>Signed & Stamped</span>
+                            </Badge>
+                          ) : (
+                            <Badge bg="secondary" className="d-inline-flex align-items-center gap-1 px-2 py-1">
+                              <FaPen size={9} />
+                              <span>Manual / Unsigned</span>
+                            </Badge>
+                          )}
+                        </td>
+                        <td className="small text-muted">
+                          {letter.joining_date}
+                        </td>
+                        <td className="small fw-semibold text-dark">
+                          {letter.annual_ctc || '—'}
+                        </td>
+                        <td className="small text-muted">
+                          {letter.issue_date}
+                        </td>
+                        <td className="text-end">
+                          <div className="d-flex justify-content-end gap-1">
+                            {/* Quick Authorize / Revoke Action */}
+                            {isSigned ? (
+                              <Button 
+                                variant="outline-warning" 
+                                size="sm" 
+                                title="Revoke Stamp & Signature"
+                                className="p-1 px-2"
+                                onClick={() => handleRevokeAuth(letter)}
+                              >
+                                <FaLock size={12} className="text-warning" />
+                              </Button>
+                            ) : (
+                              <Button 
+                                variant="outline-success" 
+                                size="sm" 
+                                title="Authorize Stamp & Signature with PIN"
+                                className="p-1 px-2"
+                                onClick={() => handleOpenAuthModal(letter)}
+                              >
+                                <FaKey size={12} className="text-success" />
+                              </Button>
+                            )}
+
+                            <Button 
+                              variant="outline-primary" 
+                              size="sm" 
+                              title="Preview and Print Letter"
+                              className="p-1 px-2"
+                              onClick={() => {
+                                setPreviewLetter(letter);
+                                setShowPreviewModal(true);
+                              }}
+                            >
+                              <FaEye size={12} className="me-1" />
+                              <span>View</span>
+                            </Button>
+                            <Button 
+                              variant="outline-secondary" 
+                              size="sm" 
+                              title="Edit Letter Data"
+                              className="p-1 px-2"
+                              onClick={() => handleOpenEditModal(letter)}
+                            >
+                              <FaEdit size={12} />
+                            </Button>
+                            <Button 
+                              variant="outline-danger" 
+                              size="sm" 
+                              title="Delete"
+                              className="p-1 px-2"
+                              onClick={() => handleDeleteLetter(letter.id, letter.reference_no)}
+                            >
+                              <FaTrash size={12} />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </Table>
             </div>
@@ -601,29 +813,28 @@ export default function LetterList({ defaultType = 'all' }) {
         show={showFormModal} 
         onHide={() => setShowFormModal(false)} 
         dialogClassName="letter-generate-modal"
+        fullscreen="lg-down"
         backdrop="static"
       >
-        <Form onSubmit={handleFormSubmit} className="d-flex flex-column h-100">
-          <Modal.Header closeButton className="py-2 px-3">
-            <div className="d-flex flex-wrap align-items-center justify-content-between w-100 gap-2 me-3">
-              <div>
-                <Modal.Title className="fs-5 fw-bold d-flex align-items-center gap-2 mb-0">
+        <Form onSubmit={handleFormSubmit}>
+          <Modal.Header closeButton onHide={() => setShowFormModal(false)} className="no-print">
+            <div className="d-flex flex-wrap align-items-center justify-content-between w-100 me-3 gap-2">
+              <div className="d-flex align-items-center gap-2">
+                <Modal.Title className="fs-5 fw-bold d-flex align-items-center gap-2 text-dark">
                   <FaFileAlt className="text-primary" />
-                  <span>{editingLetterId ? 'Edit Letter Details' : 'Generate Official Dynamic Letter'}</span>
+                  <span>{editingLetterId ? 'Edit Letter' : 'Generate New Official Letter'}</span>
                 </Modal.Title>
-                <div className="text-muted small" style={{ fontSize: '12px' }}>
-                  Real-time live content screen displays your letter dynamically as you fill out the details.
-                </div>
+                <Badge bg="primary-subtle" className="text-primary border border-primary-subtle d-none d-sm-inline">
+                  Interactive Live Screen
+                </Badge>
               </div>
 
-              {/* View Switcher: Split vs Form vs Full Content Screen */}
+              {/* Layout Switcher (Split / Form / Preview) */}
               <div className="d-flex align-items-center gap-2">
-                <span className="small fw-semibold text-secondary d-none d-md-inline">Screen View:</span>
-                <ButtonGroup size="sm">
+                <ButtonGroup size="sm" className="d-none d-md-inline-flex">
                   <Button 
                     variant={generateViewMode === 'split' ? 'primary' : 'outline-secondary'}
                     onClick={() => setGenerateViewMode('split')}
-                    title="Form and Live Letter Content side by side"
                     className="d-flex align-items-center gap-1"
                   >
                     <FaColumns size={12} />
@@ -632,7 +843,6 @@ export default function LetterList({ defaultType = 'all' }) {
                   <Button 
                     variant={generateViewMode === 'form' ? 'primary' : 'outline-secondary'}
                     onClick={() => setGenerateViewMode('form')}
-                    title="Form Only"
                     className="d-flex align-items-center gap-1"
                   >
                     <FaEdit size={12} />
@@ -641,247 +851,302 @@ export default function LetterList({ defaultType = 'all' }) {
                   <Button 
                     variant={generateViewMode === 'preview' ? 'primary' : 'outline-secondary'}
                     onClick={() => setGenerateViewMode('preview')}
-                    title="Content Screen Only"
                     className="d-flex align-items-center gap-1"
                   >
                     <FaDesktop size={12} />
-                    <span>Content Screen</span>
+                    <span>Live Letter</span>
                   </Button>
                 </ButtonGroup>
               </div>
             </div>
           </Modal.Header>
+
           <Modal.Body className="p-0">
-            <Row className="g-0 m-0">
+            <Row className="g-0">
+              {/* LEFT COLUMN: EDITABLE FORM */}
               {(generateViewMode === 'split' || generateViewMode === 'form') && (
                 <Col 
                   xs={12} 
                   lg={generateViewMode === 'split' ? 5 : 12}
                   className="letter-form-column"
                 >
-            {/* Letter Type Selection */}
-            <div className="mb-3 p-3 bg-light rounded border">
-              <Form.Label className="fw-semibold small text-uppercase text-secondary mb-2">
-                Step 1: Choose Letter Type
-              </Form.Label>
-              <div className="d-flex gap-3">
-                <Form.Check 
-                  type="radio"
-                  id="type-offer"
-                  label="Offer Letter"
-                  name="letter_type"
-                  checked={formData.letter_type === 'offer'}
-                  onChange={() => setFormData({ ...formData, letter_type: 'offer' })}
-                />
-                <Form.Check 
-                  type="radio"
-                  id="type-joining"
-                  label="Joining & Appointment Letter"
-                  name="letter_type"
-                  checked={formData.letter_type === 'joining'}
-                  onChange={() => setFormData({ ...formData, letter_type: 'joining' })}
-                />
-                <Form.Check 
-                  type="radio"
-                  id="type-experience"
-                  label="Experience Certificate"
-                  name="letter_type"
-                  checked={formData.letter_type === 'experience'}
-                  onChange={() => setFormData({ ...formData, letter_type: 'experience' })}
-                />
-              </div>
-            </div>
+                  {/* Letter Type Selector */}
+                  <div className="mb-3 p-3 bg-white rounded border">
+                    <Form.Label className="fw-bold text-dark small mb-2 d-block">
+                      1. Select Document Type:
+                    </Form.Label>
+                    <div className="d-flex flex-wrap gap-3">
+                      <Form.Check 
+                        type="radio"
+                        id="type-offer"
+                        label="Offer Letter"
+                        name="letter_type"
+                        checked={formData.letter_type === 'offer'}
+                        onChange={() => setFormData({ ...formData, letter_type: 'offer' })}
+                      />
+                      <Form.Check 
+                        type="radio"
+                        id="type-joining"
+                        label="Joining Letter"
+                        name="letter_type"
+                        checked={formData.letter_type === 'joining'}
+                        onChange={() => setFormData({ ...formData, letter_type: 'joining' })}
+                      />
+                      <Form.Check 
+                        type="radio"
+                        id="type-experience"
+                        label="Experience Certificate"
+                        name="letter_type"
+                        checked={formData.letter_type === 'experience'}
+                        onChange={() => setFormData({ ...formData, letter_type: 'experience' })}
+                      />
+                    </div>
+                  </div>
 
-            {/* Quick Auto-fill from Existing Employee */}
-            <div className="mb-3">
-              <Form.Label className="small fw-semibold text-muted">
-                Quick Select Registered Employee (Auto-Fills Details):
-              </Form.Label>
-              <Form.Select 
-                value={formData.employee_id} 
-                onChange={(e) => handleSelectEmployee(e.target.value)}
-              >
-                <option value="">-- Or enter external candidate below --</option>
-                {employeeOptions.map(emp => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.first_name} {emp.last_name} ({emp.employee_id || emp.id}) - {emp.position || emp.department}
-                  </option>
-                ))}
-              </Form.Select>
-            </div>
+                  {/* Quick Auto-fill from Existing Employee */}
+                  <div className="mb-3">
+                    <Form.Label className="small fw-semibold text-muted">
+                      Quick Select Registered Employee (Auto-Fills Details):
+                    </Form.Label>
+                    <Form.Select 
+                      value={formData.employee_id} 
+                      onChange={(e) => handleSelectEmployee(e.target.value)}
+                    >
+                      <option value="">-- Or enter external candidate below --</option>
+                      {employeeOptions.map(emp => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.first_name} {emp.last_name} ({emp.employee_id || emp.id}) - {emp.position || emp.department}
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </div>
 
-            {/* Candidate & Position Fields */}
-            <Row className="g-3">
-              <Col md={6}>
-                <Form.Group>
-                  <Form.Label className="small fw-semibold">Candidate / Employee Name *</Form.Label>
-                  <Form.Control 
-                    type="text" 
-                    placeholder="e.g. Mr. Alok Kumar"
-                    value={formData.candidate_name}
-                    onChange={(e) => setFormData({ ...formData, candidate_name: e.target.value })}
-                    required
-                  />
-                </Form.Group>
-              </Col>
+                  {/* Candidate & Position Fields */}
+                  <Row className="g-3">
+                    <Col md={6}>
+                      <Form.Group>
+                        <Form.Label className="small fw-semibold">Candidate / Employee Name *</Form.Label>
+                        <Form.Control 
+                          type="text" 
+                          placeholder="e.g. Mr. Alok Kumar"
+                          value={formData.candidate_name}
+                          onChange={(e) => setFormData({ ...formData, candidate_name: e.target.value })}
+                          required
+                        />
+                      </Form.Group>
+                    </Col>
 
-              <Col md={6}>
-                <Form.Group>
-                  <Form.Label className="small fw-semibold">Designation / Position *</Form.Label>
-                  <Form.Control 
-                    type="text" 
-                    placeholder="e.g. UI Designer / Full Stack Developer"
-                    value={formData.position}
-                    onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-                    required
-                  />
-                </Form.Group>
-              </Col>
+                    <Col md={6}>
+                      <Form.Group>
+                        <Form.Label className="small fw-semibold">Designation / Position *</Form.Label>
+                        <Form.Control 
+                          type="text" 
+                          placeholder="e.g. UI Designer / Full Stack Developer"
+                          value={formData.position}
+                          onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                          required
+                        />
+                      </Form.Group>
+                    </Col>
 
-              <Col md={6}>
-                <Form.Group>
-                  <Form.Label className="small fw-semibold">Department</Form.Label>
-                  <Form.Control 
-                    type="text" 
-                    placeholder="e.g. Technology & Engineering"
-                    value={formData.department}
-                    onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                  />
-                </Form.Group>
-              </Col>
+                    <Col md={6}>
+                      <Form.Group>
+                        <Form.Label className="small fw-semibold">Department</Form.Label>
+                        <Form.Control 
+                          type="text" 
+                          placeholder="e.g. Technology & Engineering"
+                          value={formData.department}
+                          onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                        />
+                      </Form.Group>
+                    </Col>
 
-              <Col md={6}>
-                <Form.Group>
-                  <Form.Label className="small fw-semibold">Candidate Email</Form.Label>
-                  <Form.Control 
-                    type="email" 
-                    placeholder="candidate@example.com"
-                    value={formData.candidate_email}
-                    onChange={(e) => setFormData({ ...formData, candidate_email: e.target.value })}
-                  />
-                </Form.Group>
-              </Col>
+                    <Col md={6}>
+                      <Form.Group>
+                        <Form.Label className="small fw-semibold">Joining / Commencement Date *</Form.Label>
+                        <Form.Control 
+                          type="date" 
+                          value={formData.joining_date}
+                          onChange={(e) => setFormData({ ...formData, joining_date: e.target.value })}
+                          required
+                        />
+                      </Form.Group>
+                    </Col>
 
-              <Col md={6}>
-                <Form.Group>
-                  <Form.Label className="small fw-semibold">Candidate Phone</Form.Label>
-                  <Form.Control 
-                    type="text" 
-                    placeholder="+91 9876543210"
-                    value={formData.candidate_phone}
-                    onChange={(e) => setFormData({ ...formData, candidate_phone: e.target.value })}
-                  />
-                </Form.Group>
-              </Col>
+                    {formData.letter_type === 'experience' && (
+                      <Col md={6}>
+                        <Form.Group>
+                          <Form.Label className="small fw-semibold">Relieving / End Date</Form.Label>
+                          <Form.Control 
+                            type="date" 
+                            value={formData.end_date}
+                            onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                          />
+                        </Form.Group>
+                      </Col>
+                    )}
 
-              <Col md={6}>
-                <Form.Group>
-                  <Form.Label className="small fw-semibold">Joining Date *</Form.Label>
-                  <Form.Control 
-                    type="date" 
-                    value={formData.joining_date}
-                    onChange={(e) => setFormData({ ...formData, joining_date: e.target.value })}
-                    required
-                  />
-                </Form.Group>
-              </Col>
+                    {formData.letter_type !== 'experience' && (
+                      <Col md={6}>
+                        <Form.Group>
+                          <Form.Label className="small fw-semibold">Annual Compensation (CTC)</Form.Label>
+                          <Form.Control 
+                            type="text" 
+                            placeholder="e.g. ₹1.2 LPA / ₹3,50,000 PA"
+                            value={formData.annual_ctc}
+                            onChange={(e) => setFormData({ ...formData, annual_ctc: e.target.value })}
+                          />
+                        </Form.Group>
+                      </Col>
+                    )}
 
-              {formData.letter_type === 'experience' ? (
-                <Col md={6}>
-                  <Form.Group>
-                    <Form.Label className="small fw-semibold">Relieving / End Date *</Form.Label>
-                    <Form.Control 
-                      type="date" 
-                      value={formData.end_date}
-                      onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                      required
-                    />
-                  </Form.Group>
-                </Col>
-              ) : (
-                <Col md={6}>
-                  <Form.Group>
-                    <Form.Label className="small fw-semibold">Annual Compensation (CTC)</Form.Label>
-                    <Form.Control 
-                      type="text" 
-                      placeholder="e.g. ₹1.2 LPA or ₹3,60,000"
-                      value={formData.annual_ctc}
-                      onChange={(e) => setFormData({ ...formData, annual_ctc: e.target.value })}
-                    />
-                  </Form.Group>
-                </Col>
-              )}
+                    <Col md={6}>
+                      <Form.Group>
+                        <Form.Label className="small fw-semibold">Work Location</Form.Label>
+                        <Form.Control 
+                          type="text" 
+                          placeholder="e.g. Buxar, Bihar (802101)"
+                          value={formData.work_location}
+                          onChange={(e) => setFormData({ ...formData, work_location: e.target.value })}
+                        />
+                      </Form.Group>
+                    </Col>
 
-              <Col md={6}>
-                <Form.Group>
-                  <Form.Label className="small fw-semibold">Work / Office Location</Form.Label>
-                  <Form.Control 
-                    type="text" 
-                    placeholder="e.g. Buxar, Bihar (802101)"
-                    value={formData.work_location}
-                    onChange={(e) => setFormData({ ...formData, work_location: e.target.value })}
-                  />
-                </Form.Group>
-              </Col>
+                    <Col md={6}>
+                      <Form.Group>
+                        <Form.Label className="small fw-semibold">Date of Letter Issue</Form.Label>
+                        <Form.Control 
+                          type="date" 
+                          value={formData.issue_date}
+                          onChange={(e) => setFormData({ ...formData, issue_date: e.target.value })}
+                        />
+                      </Form.Group>
+                    </Col>
 
-              <Col md={6}>
-                <Form.Group>
-                  <Form.Label className="small fw-semibold">Letter Issue Date</Form.Label>
-                  <Form.Control 
-                    type="date" 
-                    value={formData.issue_date}
-                    onChange={(e) => setFormData({ ...formData, issue_date: e.target.value })}
-                  />
-                </Form.Group>
-              </Col>
+                    <Col md={12}>
+                      <Form.Group>
+                        <Form.Label className="small fw-semibold">Candidate Residential Address</Form.Label>
+                        <Form.Control 
+                          type="text" 
+                          placeholder="e.g. Pushtakalya Road, Buxar, Bihar, 802101"
+                          value={formData.candidate_address}
+                          onChange={(e) => setFormData({ ...formData, candidate_address: e.target.value })}
+                        />
+                      </Form.Group>
+                    </Col>
 
-              <Col md={12}>
-                <Form.Group>
-                  <Form.Label className="small fw-semibold">Candidate Residential Address</Form.Label>
-                  <Form.Control 
-                    type="text" 
-                    placeholder="e.g. Pushtakalya Road, Buxar, Bihar, 802101"
-                    value={formData.candidate_address}
-                    onChange={(e) => setFormData({ ...formData, candidate_address: e.target.value })}
-                  />
-                </Form.Group>
-              </Col>
+                    <Col md={6}>
+                      <Form.Group>
+                        <Form.Label className="small fw-semibold">Signatory Name</Form.Label>
+                        <Form.Control 
+                          type="text" 
+                          value={formData.signatory_name}
+                          onChange={(e) => setFormData({ ...formData, signatory_name: e.target.value })}
+                        />
+                      </Form.Group>
+                    </Col>
 
-              <Col md={6}>
-                <Form.Group>
-                  <Form.Label className="small fw-semibold">Signatory Name</Form.Label>
-                  <Form.Control 
-                    type="text" 
-                    value={formData.signatory_name}
-                    onChange={(e) => setFormData({ ...formData, signatory_name: e.target.value })}
-                  />
-                </Form.Group>
-              </Col>
+                    <Col md={6}>
+                      <Form.Group>
+                        <Form.Label className="small fw-semibold">Signatory Title</Form.Label>
+                        <Form.Control 
+                          type="text" 
+                          value={formData.signatory_title}
+                          onChange={(e) => setFormData({ ...formData, signatory_title: e.target.value })}
+                        />
+                      </Form.Group>
+                    </Col>
 
-              <Col md={6}>
-                <Form.Group>
-                  <Form.Label className="small fw-semibold">Signatory Title</Form.Label>
-                  <Form.Control 
-                    type="text" 
-                    value={formData.signatory_title}
-                    onChange={(e) => setFormData({ ...formData, signatory_title: e.target.value })}
-                  />
-                </Form.Group>
-              </Col>
+                    <Col md={12}>
+                      <Form.Group>
+                        <Form.Label className="small fw-semibold">Special Terms or Custom Note (Optional)</Form.Label>
+                        <Form.Control 
+                          as="textarea"
+                          rows={2}
+                          placeholder="Optional additional clauses, probation specifications, or custom remarks..."
+                          value={formData.custom_terms}
+                          onChange={(e) => setFormData({ ...formData, custom_terms: e.target.value })}
+                        />
+                      </Form.Group>
+                    </Col>
+                  </Row>
 
-              <Col md={12}>
-                <Form.Group>
-                  <Form.Label className="small fw-semibold">Special Terms or Custom Note (Optional)</Form.Label>
-                  <Form.Control 
-                    as="textarea"
-                    rows={2}
-                    placeholder="Optional additional clauses, probation specifications, or custom remarks..."
-                    value={formData.custom_terms}
-                    onChange={(e) => setFormData({ ...formData, custom_terms: e.target.value })}
-                  />
-                </Form.Group>
-              </Col>
-            </Row>
+                  {/* SECURITY & OFFICIAL STAMP / SIGNATURE AUTHORIZATION */}
+                  <Card className="mt-3 border-0 shadow-sm" style={{ background: '#f8fafc', borderRadius: '10px' }}>
+                    <Card.Body className="p-3">
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <div className="fw-semibold small d-flex align-items-center gap-2 text-dark">
+                          <FaLock className="text-primary" />
+                          <span>Official Stamp & Digital Signature Security</span>
+                        </div>
+                        {isPinConfigured ? (
+                          <Badge bg="success" className="py-1 px-2 small">
+                            <FaCheckCircle className="me-1" /> PIN Configured
+                          </Badge>
+                        ) : (
+                          <Button 
+                            size="sm" 
+                            variant="outline-danger" 
+                            className="py-0 px-2 small"
+                            onClick={() => setShowPinModal(true)}
+                          >
+                            Configure PIN
+                          </Button>
+                        )}
+                      </div>
+
+                      <Form.Check 
+                        type="switch"
+                        id="modal-include-signature-switch"
+                        label={<span className="small fw-semibold text-secondary">Apply Official Stamp & Digital Signature to this document</span>}
+                        checked={Boolean(formData.include_signature && formData.include_stamp)}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setFormData(prev => ({
+                            ...prev,
+                            include_signature: checked,
+                            include_stamp: checked
+                          }));
+                        }}
+                      />
+
+                      {(formData.include_signature || formData.include_stamp) && (
+                        <div className="mt-3 p-3 bg-white rounded border">
+                          {!isPinConfigured ? (
+                            <Alert variant="warning" className="py-2 px-2 mb-0 small">
+                              <FaExclamationTriangle className="me-1" />
+                              Security PIN is not configured yet.{' '}
+                              <Button variant="link" className="p-0 small fw-bold" onClick={() => setShowPinModal(true)}>
+                                Click here to set Security PIN
+                              </Button>
+                            </Alert>
+                          ) : (
+                            <Form.Group>
+                              <Form.Label className="small fw-bold text-dark mb-1">
+                                Enter Security PIN to Authorize Stamp & Signature <span className="text-danger">*</span>
+                              </Form.Label>
+                              <InputGroup size="sm">
+                                <InputGroup.Text><FaKey size={12} /></InputGroup.Text>
+                                <Form.Control
+                                  type={showFormPin ? 'text' : 'password'}
+                                  maxLength={8}
+                                  placeholder="4-8 digit Security PIN"
+                                  value={formData.security_pin || ''}
+                                  onChange={(e) => setFormData(prev => ({ ...prev, security_pin: e.target.value }))}
+                                />
+                                <Button variant="outline-secondary" onClick={() => setShowFormPin(v => !v)}>
+                                  {showFormPin ? <FaEyeSlash size={12} /> : <FaEye size={12} />}
+                                </Button>
+                              </InputGroup>
+                              <Form.Text className="text-muted" style={{ fontSize: '11px' }}>
+                                Your confidential PIN authorizes embedding the company seal and signature.
+                              </Form.Text>
+                            </Form.Group>
+                          )}
+                        </div>
+                      )}
+                    </Card.Body>
+                  </Card>
                 </Col>
               )}
 
@@ -921,23 +1186,22 @@ export default function LetterList({ defaultType = 'all' }) {
                     </div>
                   </div>
 
-                  <div className="letter-preview-scroll-area">
+                  <div className="letter-preview-scroll-viewport">
                     <div 
-                      className="letter-zoom-viewport"
-                      style={{ 
+                      className="letter-preview-scroll-wrapper"
+                      style={{
                         transform: `scale(${generateZoom})`,
+                        transformOrigin: 'top center',
                         marginBottom: generateZoom < 1 ? `-${Math.round((1 - generateZoom) * 1150)}px` : '0px'
                       }}
                     >
                       {renderLetterTemplate({
                         ...formData,
-                        reference_no: formData.reference_no || (
-                          formData.letter_type === 'joining' 
-                            ? `PT/JL/${new Date().getFullYear()}/DRAFT` 
-                            : formData.letter_type === 'experience'
-                            ? `PT/EXP/${new Date().getFullYear()}/DRAFT`
-                            : `PT/OL/${new Date().getFullYear()}/DRAFT`
-                        )
+                        reference_no: editingLetterId 
+                          ? (letters.find(l => l.id === editingLetterId)?.reference_no || 'PT/OL/2026/001')
+                          : 'PT/DRAFT/2026/NEW',
+                        include_stamp: Boolean(formData.include_stamp && (editingLetterId && !formData.security_pin ? formData.include_stamp : Boolean(formData.security_pin))),
+                        include_signature: Boolean(formData.include_signature && (editingLetterId && !formData.security_pin ? formData.include_signature : Boolean(formData.security_pin)))
                       })}
                     </div>
                   </div>
@@ -946,25 +1210,25 @@ export default function LetterList({ defaultType = 'all' }) {
             </Row>
           </Modal.Body>
 
-          <Modal.Footer className="bg-white border-top py-2 px-4">
-            <div className="d-flex justify-content-between align-items-center w-100 flex-wrap gap-2">
+          <Modal.Footer className="no-print bg-white border-top py-2 px-3">
+            <div className="d-flex justify-content-between align-items-center w-100">
               <div className="text-muted small">
-                {formData.letter_type === 'offer' && 'Standard ParakshTech Offer Letter'}
-                {formData.letter_type === 'joining' && 'Official Appointment & Joining Letter'}
-                {formData.letter_type === 'experience' && 'Work Experience & Relieving Certificate'}
+                {editingLetterId ? 'Modifying existing document' : 'Generating new official company letter'}
               </div>
               <div className="d-flex gap-2">
-                <Button variant="secondary" onClick={() => setShowFormModal(false)}>
+                <Button variant="secondary" size="sm" onClick={() => setShowFormModal(false)}>
                   Cancel
                 </Button>
-                <Button variant="primary" type="submit" disabled={submitting}>
+                <Button variant="primary" size="sm" type="submit" disabled={submitting}>
                   {submitting ? (
                     <>
                       <Spinner size="sm" animation="border" className="me-2" />
-                      Generating...
+                      Saving...
                     </>
+                  ) : editingLetterId ? (
+                    'Update Letter'
                   ) : (
-                    editingLetterId ? 'Save Changes' : 'Generate & Issue Letter'
+                    'Generate & Finalize Letter'
                   )}
                 </Button>
               </div>
@@ -1006,9 +1270,45 @@ export default function LetterList({ defaultType = 'all' }) {
                 | {previewLetter.candidate_name}
               </span>
             )}
+            {previewLetter?.include_signature && previewLetter?.include_stamp ? (
+              <Badge bg="success" className="d-flex align-items-center gap-1 py-1 px-2 small">
+                <FaShieldAlt size={10} />
+                <span>Digitally Signed & Stamped</span>
+              </Badge>
+            ) : (
+              <Badge bg="secondary" className="d-flex align-items-center gap-1 py-1 px-2 small">
+                <FaPen size={9} />
+                <span>Manual Ink Signature</span>
+              </Badge>
+            )}
           </div>
 
           <div className="d-flex align-items-center gap-2 me-2">
+            {/* Quick Toggle in Preview Header */}
+            {previewLetter?.include_signature && previewLetter?.include_stamp ? (
+              <Button 
+                variant="outline-warning" 
+                size="sm" 
+                onClick={() => handleRevokeAuth(previewLetter)}
+                className="d-flex align-items-center gap-1 px-2"
+                title="Revoke stamp and signature"
+              >
+                <FaLock size={11} />
+                <span className="d-none d-sm-inline">Revoke Seal</span>
+              </Button>
+            ) : (
+              <Button 
+                variant="outline-success" 
+                size="sm" 
+                onClick={() => handleOpenAuthModal(previewLetter)}
+                className="d-flex align-items-center gap-1 px-2"
+                title="Authorize stamp and signature with PIN"
+              >
+                <FaKey size={11} />
+                <span className="d-none d-sm-inline">Authorize Seal & Sign</span>
+              </Button>
+            )}
+
             <div className="d-flex align-items-center gap-1 me-2 d-none d-sm-flex">
               <span className="text-secondary small me-1">Scale:</span>
               {[0.75, 0.85, 1.0, 1.1].map(z => (
@@ -1088,7 +1388,165 @@ export default function LetterList({ defaultType = 'all' }) {
           </div>
         </Modal.Footer>
       </Modal>
+
+      {/* SECURITY PIN CONFIGURATION MODAL */}
+      <Modal 
+        show={showPinModal} 
+        onHide={() => setShowPinModal(false)}
+        centered
+        backdrop="static"
+      >
+        <Form onSubmit={handleConfigurePinSubmit}>
+          <Modal.Header closeButton onHide={() => setShowPinModal(false)}>
+            <Modal.Title className="fs-5 fw-bold d-flex align-items-center gap-2 text-dark">
+              <FaKey className="text-primary" />
+              <span>{isPinConfigured ? 'Change Security PIN' : 'Configure Security PIN'}</span>
+            </Modal.Title>
+          </Modal.Header>
+
+          <Modal.Body>
+            <p className="text-muted small mb-3">
+              The Security PIN is confidential and protects the company's official digital stamp and authorized signature. It is required whenever creating or updating letters with embedded digital seals.
+            </p>
+
+            {isPinConfigured ? (
+              <Alert variant="info" className="py-2 px-3 small d-flex align-items-center gap-2">
+                <FaCheckCircle className="text-success" />
+                <span>Security PIN is currently active. To change it, enter your current PIN followed by a new PIN.</span>
+              </Alert>
+            ) : (
+              <Alert variant="warning" className="py-2 px-3 small d-flex align-items-center gap-2">
+                <FaExclamationTriangle className="text-warning" />
+                <span>No Security PIN configured. Set a 4-8 digit confidential PIN below.</span>
+              </Alert>
+            )}
+
+            {isPinConfigured && (
+              <Form.Group className="mb-3">
+                <Form.Label className="small fw-semibold">Current Security PIN *</Form.Label>
+                <InputGroup size="sm">
+                  <InputGroup.Text><FaLock size={12} /></InputGroup.Text>
+                  <Form.Control 
+                    type={showPinCurrent ? "text" : "password"}
+                    maxLength={8}
+                    placeholder="Enter current PIN"
+                    value={pinForm.currentPin}
+                    onChange={(e) => setPinForm({ ...pinForm, currentPin: e.target.value })}
+                    required
+                  />
+                  <Button variant="outline-secondary" onClick={() => setShowPinCurrent(v => !v)}>
+                    {showPinCurrent ? <FaEyeSlash size={12} /> : <FaEye size={12} />}
+                  </Button>
+                </InputGroup>
+              </Form.Group>
+            )}
+
+            <Form.Group className="mb-3">
+              <Form.Label className="small fw-semibold">New Security PIN (4-8 digits) *</Form.Label>
+              <InputGroup size="sm">
+                <InputGroup.Text><FaKey size={12} /></InputGroup.Text>
+                <Form.Control 
+                  type={showPinNew ? "text" : "password"}
+                  maxLength={8}
+                  placeholder="Enter 4-8 digit new PIN"
+                  value={pinForm.newPin}
+                  onChange={(e) => setPinForm({ ...pinForm, newPin: e.target.value })}
+                  required
+                />
+                <Button variant="outline-secondary" onClick={() => setShowPinNew(v => !v)}>
+                  {showPinNew ? <FaEyeSlash size={12} /> : <FaEye size={12} />}
+                </Button>
+              </InputGroup>
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label className="small fw-semibold">Confirm New Security PIN *</Form.Label>
+              <InputGroup size="sm">
+                <InputGroup.Text><FaKey size={12} /></InputGroup.Text>
+                <Form.Control 
+                  type={showPinConfirm ? "text" : "password"}
+                  maxLength={8}
+                  placeholder="Re-enter new PIN"
+                  value={pinForm.confirmPin}
+                  onChange={(e) => setPinForm({ ...pinForm, confirmPin: e.target.value })}
+                  required
+                />
+                <Button variant="outline-secondary" onClick={() => setShowPinConfirm(v => !v)}>
+                  {showPinConfirm ? <FaEyeSlash size={12} /> : <FaEye size={12} />}
+                </Button>
+              </InputGroup>
+            </Form.Group>
+          </Modal.Body>
+
+          <Modal.Footer>
+            <Button variant="secondary" size="sm" onClick={() => setShowPinModal(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" type="submit" disabled={pinLoading}>
+              {pinLoading ? <Spinner size="sm" animation="border" className="me-2" /> : null}
+              {isPinConfigured ? 'Update PIN' : 'Save Security PIN'}
+            </Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
+
+      {/* QUICK AUTHORIZE MODAL FOR EXISTING LETTERS */}
+      <Modal 
+        show={showAuthModal} 
+        onHide={() => setShowAuthModal(false)}
+        centered
+        size="sm"
+        backdrop="static"
+      >
+        <Form onSubmit={handleAuthorizeSubmit}>
+          <Modal.Header closeButton onHide={() => setShowAuthModal(false)}>
+            <Modal.Title className="fs-6 fw-bold d-flex align-items-center gap-2 text-dark">
+              <FaShieldAlt className="text-success" />
+              <span>Authorize Stamp & Signature</span>
+            </Modal.Title>
+          </Modal.Header>
+
+          <Modal.Body>
+            <p className="text-muted small mb-2">
+              Authorize digital seal and signature for:
+            </p>
+            <div className="p-2 bg-light rounded mb-3 small">
+              <div className="fw-bold text-dark">{authLetterTarget?.reference_no}</div>
+              <div className="text-secondary">{authLetterTarget?.candidate_name} ({authLetterTarget?.position})</div>
+            </div>
+
+            <Form.Group>
+              <Form.Label className="small fw-semibold">Enter Security PIN *</Form.Label>
+              <InputGroup size="sm">
+                <InputGroup.Text><FaKey size={12} /></InputGroup.Text>
+                <Form.Control 
+                  type={showAuthPin ? "text" : "password"}
+                  maxLength={8}
+                  placeholder="4-8 digit Security PIN"
+                  value={authPin}
+                  onChange={(e) => setAuthPin(e.target.value)}
+                  autoFocus
+                  required
+                />
+                <Button variant="outline-secondary" onClick={() => setShowAuthPin(v => !v)}>
+                  {showAuthPin ? <FaEyeSlash size={12} /> : <FaEye size={12} />}
+                </Button>
+              </InputGroup>
+            </Form.Group>
+          </Modal.Body>
+
+          <Modal.Footer className="py-2">
+            <Button variant="secondary" size="sm" onClick={() => setShowAuthModal(false)}>
+              Cancel
+            </Button>
+            <Button variant="success" size="sm" type="submit" disabled={authLoading}>
+              {authLoading ? <Spinner size="sm" animation="border" className="me-1" /> : null}
+              Authorize
+            </Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
+
     </div>
   );
 }
-

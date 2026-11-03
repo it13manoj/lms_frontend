@@ -26,6 +26,8 @@ export default function OfferLetter({ data = {} }) {
   const signatoryTitle = data.signatory_title || 'For ParakshTech LLP';
   const signatoryName = data.signatory_name || 'Authorized Signatory';
   const customTerms = data.custom_terms;
+  const hasSignature = Boolean(data.include_signature);
+  const hasStamp = Boolean(data.include_stamp);
 
   return (
     <div className="printable-letter-container" style={styles.outerWrapper}>
@@ -115,33 +117,37 @@ export default function OfferLetter({ data = {} }) {
                     <td style={styles.sigTdLeft}>
                       <div style={styles.sigBox}>
                         <div style={{ ...styles.sigImgContainer, position: 'relative', height: '46px', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-                          <img
-                            src={stampImg}
-                            alt="Stamp"
-                            style={{
-                              position: 'absolute',
-                              left: '-10px',
-                              bottom: '-6px',
-                              maxHeight: '48px',
-                              maxWidth: '85px',
-                              opacity: 0.7,
-                              pointerEvents: 'none',
-                              objectFit: 'contain',
-                            }}
-                            onError={(e) => { e.target.src = '/stamp.png'; }}
-                          />
-                          <img
-                            src={signatureImg}
-                            alt="Authorized Signature"
-                            style={{
-                              maxHeight: '42px',
-                              maxWidth: '170px',
-                              objectFit: 'contain',
-                              position: 'relative',
-                              zIndex: 2,
-                            }}
-                            onError={(e) => { e.target.src = '/signature.png'; }}
-                          />
+                          {hasStamp && (
+                            <img
+                              src={stampImg}
+                              alt="Stamp"
+                              style={{
+                                position: 'absolute',
+                                left: '-10px',
+                                bottom: '-6px',
+                                maxHeight: '48px',
+                                maxWidth: '85px',
+                                opacity: 0.7,
+                                pointerEvents: 'none',
+                                objectFit: 'contain',
+                              }}
+                              onError={(e) => { e.target.src = '/stamp.png'; }}
+                            />
+                          )}
+                          {hasSignature && (
+                            <img
+                              src={signatureImg}
+                              alt="Authorized Signature"
+                              style={{
+                                maxHeight: '42px',
+                                maxWidth: '170px',
+                                objectFit: 'contain',
+                                position: 'relative',
+                                zIndex: 2,
+                              }}
+                              onError={(e) => { e.target.src = '/signature.png'; }}
+                            />
+                          )}
                         </div>
                         <div style={styles.sigLine}>{signatoryName}</div>
                         <div style={styles.sigTitle}>{signatoryTitle}</div>
