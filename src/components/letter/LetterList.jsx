@@ -8,7 +8,8 @@ import {
   FaTrash, FaEdit, FaEye, FaUserTie, FaCheckCircle, 
   FaBuilding, FaAward, FaCalendarAlt, FaMoneyBillWave,
   FaColumns, FaDesktop, FaTimes, FaLock, FaKey,
-  FaEyeSlash, FaShieldAlt, FaPen, FaExclamationTriangle
+  FaEyeSlash, FaShieldAlt, FaPen, FaExclamationTriangle,
+  FaSave, FaUser, FaBriefcase, FaMapMarkerAlt, FaFileSignature
 } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import letterService from '../../services/letterService';
@@ -52,7 +53,7 @@ export default function LetterList({ defaultType = 'all' }) {
   // Registered employees list for quick dropdown selection
   const [employeeOptions, setEmployeeOptions] = useState([]);
 
-  // Create / Edit Modal State
+  // Create / Edit Full Modal State
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingLetterId, setEditingLetterId] = useState(null);
   const [formData, setFormData] = useState(INITIAL_FORM_STATE);
@@ -61,10 +62,14 @@ export default function LetterList({ defaultType = 'all' }) {
   const [generateZoom, setGenerateZoom] = useState(0.78);
   const [showFormPin, setShowFormPin] = useState(false);
 
-  // Preview Modal State
+  // Preview & Live Editable Details Modal State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewLetter, setPreviewLetter] = useState(null);
-  const [previewModalZoom, setPreviewModalZoom] = useState(1.0);
+  const [previewFormData, setPreviewFormData] = useState(null);
+  const [previewViewMode, setPreviewViewMode] = useState('split'); // 'split' | 'preview' | 'details'
+  const [previewModalZoom, setPreviewModalZoom] = useState(0.85);
+  const [previewSaving, setPreviewSaving] = useState(false);
+  const [previewFormPin, setPreviewFormPin] = useState(false);
 
   // Security PIN Configuration Modal State
   const [isPinConfigured, setIsPinConfigured] = useState(false);
@@ -75,7 +80,7 @@ export default function LetterList({ defaultType = 'all' }) {
   const [showPinNew, setShowPinNew] = useState(false);
   const [showPinConfirm, setShowPinConfirm] = useState(false);
 
-  // Quick Authorize Modal State (for existing letters in table or preview)
+  // Quick Authorize Modal State (for existing letters)
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authLetterTarget, setAuthLetterTarget] = useState(null);
   const [authPin, setAuthPin] = useState('');
@@ -205,7 +210,76 @@ export default function LetterList({ defaultType = 'all' }) {
     setShowFormModal(true);
   };
 
-  // Submit Form (Create / Update)
+  // Open Preview & Live Editable Details Modal
+  const handleOpenPreview = (letter, initialMode = 'split') => {
+    setPreviewLetter(letter);
+    setPreviewFormData({
+      ...letter,
+      candidate_name: letter.candidate_name || '',
+      candidate_email: letter.candidate_email || '',
+      candidate_phone: letter.candidate_phone || '',
+      candidate_address: letter.candidate_address || 'Buxar, Bihar, 802101',
+      position: letter.position || '',
+      department: letter.department || '',
+      joining_date: letter.joining_date ? letter.joining_date.slice(0, 10) : '',
+      end_date: letter.end_date ? letter.end_date.slice(0, 10) : '',
+      annual_ctc: letter.annual_ctc || '₹1.2 LPA',
+      work_location: letter.work_location || 'Buxar, Bihar (802101)',
+      issue_date: letter.issue_date ? letter.issue_date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+      signatory_name: letter.signatory_name || 'Authorized Signatory',
+      signatory_title: letter.signatory_title || 'For ParakshTech LLP',
+      custom_terms: letter.custom_terms || '',
+      include_signature: Boolean(letter.include_signature),
+      include_stamp: Boolean(letter.include_stamp),
+      security_pin: ''
+    });
+    setPreviewViewMode(initialMode);
+    setShowPreviewModal(true);
+  };
+
+  // Save changes from Preview Editable Details section
+  const handleSavePreviewDetails = async (e) => {
+    if (e) e.preventDefault();
+    if (!previewFormData || !previewLetter) return;
+
+    if (!previewFormData.candidate_name || !previewFormData.position || !previewFormData.joining_date) {
+      toast.error('Candidate name, position, and joining date are required');
+      return;
+    }
+
+    const wantSignature = Boolean(previewFormData.include_signature || previewFormData.include_stamp);
+    const isNewlyEnabling = wantSignature && !previewLetter.include_signature;
+    if (isNewlyEnabling && !previewFormData.security_pin) {
+      toast.error('Security PIN is required to authorize official stamp and signature');
+      return;
+    }
+
+    try {
+      setPreviewSaving(true);
+      const res = await letterService.updateLetter(previewLetter.id, previewFormData);
+      if (res.success) {
+        toast.success('Letter details updated successfully');
+        setPreviewLetter(res.data);
+        setPreviewFormData({
+          ...res.data,
+          joining_date: res.data.joining_date ? res.data.joining_date.slice(0, 10) : '',
+          end_date: res.data.end_date ? res.data.end_date.slice(0, 10) : '',
+          issue_date: res.data.issue_date ? res.data.issue_date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+          include_signature: Boolean(res.data.include_signature),
+          include_stamp: Boolean(res.data.include_stamp),
+          security_pin: ''
+        });
+        loadLetters();
+      }
+    } catch (err) {
+      console.error('Failed to update letter details:', err);
+      toast.error(err.response?.data?.message || 'Failed to update letter details');
+    } finally {
+      setPreviewSaving(false);
+    }
+  };
+
+  // Submit Form (Create / Update from full modal)
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     if (!formData.candidate_name || !formData.position || !formData.joining_date) {
@@ -246,8 +320,7 @@ export default function LetterList({ defaultType = 'all' }) {
           toast.success('Letter generated successfully');
           setShowFormModal(false);
           loadLetters();
-          setPreviewLetter(res.data);
-          setShowPreviewModal(true);
+          handleOpenPreview(res.data, 'split');
         }
       }
     } catch (err) {
@@ -329,6 +402,13 @@ export default function LetterList({ defaultType = 'all' }) {
         loadLetters();
         if (previewLetter && previewLetter.id === authLetterTarget.id) {
           setPreviewLetter(res.data);
+          if (previewFormData) {
+            setPreviewFormData(prev => ({
+              ...prev,
+              include_signature: true,
+              include_stamp: true
+            }));
+          }
         }
       }
     } catch (err) {
@@ -350,6 +430,13 @@ export default function LetterList({ defaultType = 'all' }) {
         loadLetters();
         if (previewLetter && previewLetter.id === letter.id) {
           setPreviewLetter(res.data);
+          if (previewFormData) {
+            setPreviewFormData(prev => ({
+              ...prev,
+              include_signature: false,
+              include_stamp: false
+            }));
+          }
         }
       }
     } catch (err) {
@@ -365,6 +452,9 @@ export default function LetterList({ defaultType = 'all' }) {
       if (res.success) {
         toast.success('Letter deleted successfully');
         loadLetters();
+        if (previewLetter && previewLetter.id === id) {
+          setShowPreviewModal(false);
+        }
       }
     } catch (err) {
       toast.error('Failed to delete letter');
@@ -513,7 +603,7 @@ export default function LetterList({ defaultType = 'all' }) {
             <span>Letters & Certificates</span>
           </h3>
           <p className="text-muted mb-0 small">
-            Generate, customize, and issue official Offer Letters, Joining Letters, and Experience Certificates with Security PIN protection.
+            Generate, customize, and issue official Offer Letters, Joining Letters, and Experience Certificates with live editable details & Security PIN authorization.
           </p>
         </div>
 
@@ -765,23 +855,22 @@ export default function LetterList({ defaultType = 'all' }) {
                               </Button>
                             )}
 
+                            {/* View & Edit Details in Split Live Preview */}
                             <Button 
                               variant="outline-primary" 
                               size="sm" 
-                              title="Preview and Print Letter"
-                              className="p-1 px-2"
-                              onClick={() => {
-                                setPreviewLetter(letter);
-                                setShowPreviewModal(true);
-                              }}
+                              title="View & Edit Letter Details"
+                              className="p-1 px-2 d-flex align-items-center gap-1"
+                              onClick={() => handleOpenPreview(letter, 'split')}
                             >
-                              <FaEye size={12} className="me-1" />
-                              <span>View</span>
+                              <FaEye size={12} />
+                              <span>View &amp; Edit</span>
                             </Button>
+                            
                             <Button 
                               variant="outline-secondary" 
                               size="sm" 
-                              title="Edit Letter Data"
+                              title="Full Edit Modal"
                               className="p-1 px-2"
                               onClick={() => handleOpenEditModal(letter)}
                             >
@@ -825,7 +914,7 @@ export default function LetterList({ defaultType = 'all' }) {
                   <span>{editingLetterId ? 'Edit Letter' : 'Generate New Official Letter'}</span>
                 </Modal.Title>
                 <Badge bg="primary-subtle" className="text-primary border border-primary-subtle d-none d-sm-inline">
-                  Interactive Live Screen
+                  Editable Details Section
                 </Badge>
               </div>
 
@@ -846,7 +935,7 @@ export default function LetterList({ defaultType = 'all' }) {
                     className="d-flex align-items-center gap-1"
                   >
                     <FaEdit size={12} />
-                    <span>Form Only</span>
+                    <span>Details Only</span>
                   </Button>
                   <Button 
                     variant={generateViewMode === 'preview' ? 'primary' : 'outline-secondary'}
@@ -854,7 +943,7 @@ export default function LetterList({ defaultType = 'all' }) {
                     className="d-flex align-items-center gap-1"
                   >
                     <FaDesktop size={12} />
-                    <span>Live Letter</span>
+                    <span>Live Preview</span>
                   </Button>
                 </ButtonGroup>
               </div>
@@ -863,242 +952,321 @@ export default function LetterList({ defaultType = 'all' }) {
 
           <Modal.Body className="p-0">
             <Row className="g-0">
-              {/* LEFT COLUMN: EDITABLE FORM */}
+              {/* LEFT COLUMN: EDITABLE LETTER DETAILS SECTION */}
               {(generateViewMode === 'split' || generateViewMode === 'form') && (
                 <Col 
                   xs={12} 
                   lg={generateViewMode === 'split' ? 5 : 12}
                   className="letter-form-column"
                 >
-                  {/* Letter Type Selector */}
-                  <div className="mb-3 p-3 bg-white rounded border">
-                    <Form.Label className="fw-bold text-dark small mb-2 d-block">
-                      1. Select Document Type:
-                    </Form.Label>
-                    <div className="d-flex flex-wrap gap-3">
-                      <Form.Check 
-                        type="radio"
-                        id="type-offer"
-                        label="Offer Letter"
-                        name="letter_type"
-                        checked={formData.letter_type === 'offer'}
-                        onChange={() => setFormData({ ...formData, letter_type: 'offer' })}
-                      />
-                      <Form.Check 
-                        type="radio"
-                        id="type-joining"
-                        label="Joining Letter"
-                        name="letter_type"
-                        checked={formData.letter_type === 'joining'}
-                        onChange={() => setFormData({ ...formData, letter_type: 'joining' })}
-                      />
-                      <Form.Check 
-                        type="radio"
-                        id="type-experience"
-                        label="Experience Certificate"
-                        name="letter_type"
-                        checked={formData.letter_type === 'experience'}
-                        onChange={() => setFormData({ ...formData, letter_type: 'experience' })}
-                      />
+                  <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                    <h6 className="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                      <FaEdit className="text-primary" />
+                      <span>Editable Letter Details</span>
+                    </h6>
+                    <span className="text-muted small">Update any field to see live changes</span>
+                  </div>
+
+                  {/* Section 0: Document Type & Auto-fill */}
+                  <div className="editable-section-card">
+                    <div className="editable-section-header">
+                      <FaFileAlt className="text-primary" size={13} />
+                      <span>Document Type &amp; Employee Link</span>
+                    </div>
+                    <div className="editable-section-body">
+                      <Form.Label className="small fw-bold text-muted mb-2 d-block">
+                        Select Document Template:
+                      </Form.Label>
+                      <div className="d-flex flex-wrap gap-3 mb-3">
+                        <Form.Check 
+                          type="radio"
+                          id="type-offer"
+                          label="Offer Letter"
+                          name="letter_type"
+                          checked={formData.letter_type === 'offer'}
+                          onChange={() => setFormData({ ...formData, letter_type: 'offer' })}
+                        />
+                        <Form.Check 
+                          type="radio"
+                          id="type-joining"
+                          label="Joining Letter"
+                          name="letter_type"
+                          checked={formData.letter_type === 'joining'}
+                          onChange={() => setFormData({ ...formData, letter_type: 'joining' })}
+                        />
+                        <Form.Check 
+                          type="radio"
+                          id="type-experience"
+                          label="Experience Certificate"
+                          name="letter_type"
+                          checked={formData.letter_type === 'experience'}
+                          onChange={() => setFormData({ ...formData, letter_type: 'experience' })}
+                        />
+                      </div>
+
+                      <Form.Label className="small fw-semibold text-muted">
+                        Auto-fill from Registered Employee (Optional):
+                      </Form.Label>
+                      <Form.Select 
+                        size="sm"
+                        value={formData.employee_id} 
+                        onChange={(e) => handleSelectEmployee(e.target.value)}
+                      >
+                        <option value="">-- Or enter custom candidate details below --</option>
+                        {employeeOptions.map(emp => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.first_name} {emp.last_name} ({emp.employee_id || emp.id}) - {emp.position || emp.department}
+                          </option>
+                        ))}
+                      </Form.Select>
                     </div>
                   </div>
 
-                  {/* Quick Auto-fill from Existing Employee */}
-                  <div className="mb-3">
-                    <Form.Label className="small fw-semibold text-muted">
-                      Quick Select Registered Employee (Auto-Fills Details):
-                    </Form.Label>
-                    <Form.Select 
-                      value={formData.employee_id} 
-                      onChange={(e) => handleSelectEmployee(e.target.value)}
-                    >
-                      <option value="">-- Or enter external candidate below --</option>
-                      {employeeOptions.map(emp => (
-                        <option key={emp.id} value={emp.id}>
-                          {emp.first_name} {emp.last_name} ({emp.employee_id || emp.id}) - {emp.position || emp.department}
-                        </option>
-                      ))}
-                    </Form.Select>
+                  {/* Section 1: Candidate & Contact Details */}
+                  <div className="editable-section-card">
+                    <div className="editable-section-header">
+                      <FaUser className="text-primary" size={13} />
+                      <span>1. Candidate &amp; Recipient Information</span>
+                    </div>
+                    <div className="editable-section-body">
+                      <Row className="g-2">
+                        <Col md={12}>
+                          <Form.Group>
+                            <Form.Label className="small fw-semibold">Candidate Full Name *</Form.Label>
+                            <Form.Control 
+                              size="sm"
+                              type="text" 
+                              placeholder="e.g. Mr. Alok Kumar"
+                              value={formData.candidate_name}
+                              onChange={(e) => setFormData({ ...formData, candidate_name: e.target.value })}
+                              required
+                            />
+                          </Form.Group>
+                        </Col>
+                        <Col md={6}>
+                          <Form.Group>
+                            <Form.Label className="small fw-semibold">Email Address</Form.Label>
+                            <Form.Control 
+                              size="sm"
+                              type="email" 
+                              placeholder="candidate@example.com"
+                              value={formData.candidate_email}
+                              onChange={(e) => setFormData({ ...formData, candidate_email: e.target.value })}
+                            />
+                          </Form.Group>
+                        </Col>
+                        <Col md={6}>
+                          <Form.Group>
+                            <Form.Label className="small fw-semibold">Contact Phone</Form.Label>
+                            <Form.Control 
+                              size="sm"
+                              type="text" 
+                              placeholder="+91 9876543210"
+                              value={formData.candidate_phone}
+                              onChange={(e) => setFormData({ ...formData, candidate_phone: e.target.value })}
+                            />
+                          </Form.Group>
+                        </Col>
+                        <Col md={12}>
+                          <Form.Group>
+                            <Form.Label className="small fw-semibold">Residential Address</Form.Label>
+                            <Form.Control 
+                              size="sm"
+                              type="text" 
+                              placeholder="e.g. Pushtakalya Road, Buxar, Bihar, 802101"
+                              value={formData.candidate_address}
+                              onChange={(e) => setFormData({ ...formData, candidate_address: e.target.value })}
+                            />
+                          </Form.Group>
+                        </Col>
+                      </Row>
+                    </div>
                   </div>
 
-                  {/* Candidate & Position Fields */}
-                  <Row className="g-3">
-                    <Col md={6}>
-                      <Form.Group>
-                        <Form.Label className="small fw-semibold">Candidate / Employee Name *</Form.Label>
-                        <Form.Control 
-                          type="text" 
-                          placeholder="e.g. Mr. Alok Kumar"
-                          value={formData.candidate_name}
-                          onChange={(e) => setFormData({ ...formData, candidate_name: e.target.value })}
-                          required
-                        />
-                      </Form.Group>
-                    </Col>
+                  {/* Section 2: Position, Department & Location */}
+                  <div className="editable-section-card">
+                    <div className="editable-section-header">
+                      <FaBriefcase className="text-primary" size={13} />
+                      <span>2. Position, Role &amp; Work Location</span>
+                    </div>
+                    <div className="editable-section-body">
+                      <Row className="g-2">
+                        <Col md={6}>
+                          <Form.Group>
+                            <Form.Label className="small fw-semibold">Designation / Role *</Form.Label>
+                            <Form.Control 
+                              size="sm"
+                              type="text" 
+                              placeholder="e.g. UI Designer / Full Stack Developer"
+                              value={formData.position}
+                              onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                              required
+                            />
+                          </Form.Group>
+                        </Col>
+                        <Col md={6}>
+                          <Form.Group>
+                            <Form.Label className="small fw-semibold">Department</Form.Label>
+                            <Form.Control 
+                              size="sm"
+                              type="text" 
+                              placeholder="e.g. Technology & Engineering"
+                              value={formData.department}
+                              onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                            />
+                          </Form.Group>
+                        </Col>
+                        <Col md={12}>
+                          <Form.Group>
+                            <Form.Label className="small fw-semibold">Work Location</Form.Label>
+                            <Form.Control 
+                              size="sm"
+                              type="text" 
+                              placeholder="e.g. Buxar, Bihar (802101)"
+                              value={formData.work_location}
+                              onChange={(e) => setFormData({ ...formData, work_location: e.target.value })}
+                            />
+                          </Form.Group>
+                        </Col>
+                      </Row>
+                    </div>
+                  </div>
 
-                    <Col md={6}>
-                      <Form.Group>
-                        <Form.Label className="small fw-semibold">Designation / Position *</Form.Label>
-                        <Form.Control 
-                          type="text" 
-                          placeholder="e.g. UI Designer / Full Stack Developer"
-                          value={formData.position}
-                          onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-                          required
-                        />
-                      </Form.Group>
-                    </Col>
-
-                    <Col md={6}>
-                      <Form.Group>
-                        <Form.Label className="small fw-semibold">Department</Form.Label>
-                        <Form.Control 
-                          type="text" 
-                          placeholder="e.g. Technology & Engineering"
-                          value={formData.department}
-                          onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                        />
-                      </Form.Group>
-                    </Col>
-
-                    <Col md={6}>
-                      <Form.Group>
-                        <Form.Label className="small fw-semibold">Joining / Commencement Date *</Form.Label>
-                        <Form.Control 
-                          type="date" 
-                          value={formData.joining_date}
-                          onChange={(e) => setFormData({ ...formData, joining_date: e.target.value })}
-                          required
-                        />
-                      </Form.Group>
-                    </Col>
-
-                    {formData.letter_type === 'experience' && (
-                      <Col md={6}>
-                        <Form.Group>
-                          <Form.Label className="small fw-semibold">Relieving / End Date</Form.Label>
-                          <Form.Control 
-                            type="date" 
-                            value={formData.end_date}
-                            onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                          />
-                        </Form.Group>
-                      </Col>
-                    )}
-
-                    {formData.letter_type !== 'experience' && (
-                      <Col md={6}>
-                        <Form.Group>
-                          <Form.Label className="small fw-semibold">Annual Compensation (CTC)</Form.Label>
-                          <Form.Control 
-                            type="text" 
-                            placeholder="e.g. ₹1.2 LPA / ₹3,50,000 PA"
-                            value={formData.annual_ctc}
-                            onChange={(e) => setFormData({ ...formData, annual_ctc: e.target.value })}
-                          />
-                        </Form.Group>
-                      </Col>
-                    )}
-
-                    <Col md={6}>
-                      <Form.Group>
-                        <Form.Label className="small fw-semibold">Work Location</Form.Label>
-                        <Form.Control 
-                          type="text" 
-                          placeholder="e.g. Buxar, Bihar (802101)"
-                          value={formData.work_location}
-                          onChange={(e) => setFormData({ ...formData, work_location: e.target.value })}
-                        />
-                      </Form.Group>
-                    </Col>
-
-                    <Col md={6}>
-                      <Form.Group>
-                        <Form.Label className="small fw-semibold">Date of Letter Issue</Form.Label>
-                        <Form.Control 
-                          type="date" 
-                          value={formData.issue_date}
-                          onChange={(e) => setFormData({ ...formData, issue_date: e.target.value })}
-                        />
-                      </Form.Group>
-                    </Col>
-
-                    <Col md={12}>
-                      <Form.Group>
-                        <Form.Label className="small fw-semibold">Candidate Residential Address</Form.Label>
-                        <Form.Control 
-                          type="text" 
-                          placeholder="e.g. Pushtakalya Road, Buxar, Bihar, 802101"
-                          value={formData.candidate_address}
-                          onChange={(e) => setFormData({ ...formData, candidate_address: e.target.value })}
-                        />
-                      </Form.Group>
-                    </Col>
-
-                    <Col md={6}>
-                      <Form.Group>
-                        <Form.Label className="small fw-semibold">Signatory Name</Form.Label>
-                        <Form.Control 
-                          type="text" 
-                          value={formData.signatory_name}
-                          onChange={(e) => setFormData({ ...formData, signatory_name: e.target.value })}
-                        />
-                      </Form.Group>
-                    </Col>
-
-                    <Col md={6}>
-                      <Form.Group>
-                        <Form.Label className="small fw-semibold">Signatory Title</Form.Label>
-                        <Form.Control 
-                          type="text" 
-                          value={formData.signatory_title}
-                          onChange={(e) => setFormData({ ...formData, signatory_title: e.target.value })}
-                        />
-                      </Form.Group>
-                    </Col>
-
-                    <Col md={12}>
-                      <Form.Group>
-                        <Form.Label className="small fw-semibold">Special Terms or Custom Note (Optional)</Form.Label>
-                        <Form.Control 
-                          as="textarea"
-                          rows={2}
-                          placeholder="Optional additional clauses, probation specifications, or custom remarks..."
-                          value={formData.custom_terms}
-                          onChange={(e) => setFormData({ ...formData, custom_terms: e.target.value })}
-                        />
-                      </Form.Group>
-                    </Col>
-                  </Row>
-
-                  {/* SECURITY & OFFICIAL STAMP / SIGNATURE AUTHORIZATION */}
-                  <Card className="mt-3 border-0 shadow-sm" style={{ background: '#f8fafc', borderRadius: '10px' }}>
-                    <Card.Body className="p-3">
-                      <div className="d-flex justify-content-between align-items-center mb-2">
-                        <div className="fw-semibold small d-flex align-items-center gap-2 text-dark">
-                          <FaLock className="text-primary" />
-                          <span>Official Stamp & Digital Signature Security</span>
-                        </div>
-                        {isPinConfigured ? (
-                          <Badge bg="success" className="py-1 px-2 small">
-                            <FaCheckCircle className="me-1" /> PIN Configured
-                          </Badge>
+                  {/* Section 3: Timeline & Dates */}
+                  <div className="editable-section-card">
+                    <div className="editable-section-header">
+                      <FaCalendarAlt className="text-primary" size={13} />
+                      <span>3. Dates &amp; Timeline</span>
+                    </div>
+                    <div className="editable-section-body">
+                      <Row className="g-2">
+                        <Col md={6}>
+                          <Form.Group>
+                            <Form.Label className="small fw-semibold">Joining / Commencement Date *</Form.Label>
+                            <Form.Control 
+                              size="sm"
+                              type="date" 
+                              value={formData.joining_date}
+                              onChange={(e) => setFormData({ ...formData, joining_date: e.target.value })}
+                              required
+                            />
+                          </Form.Group>
+                        </Col>
+                        {formData.letter_type === 'experience' ? (
+                          <Col md={6}>
+                            <Form.Group>
+                              <Form.Label className="small fw-semibold">Relieving / End Date *</Form.Label>
+                              <Form.Control 
+                                size="sm"
+                                type="date" 
+                                value={formData.end_date}
+                                onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                              />
+                            </Form.Group>
+                          </Col>
                         ) : (
-                          <Button 
-                            size="sm" 
-                            variant="outline-danger" 
-                            className="py-0 px-2 small"
-                            onClick={() => setShowPinModal(true)}
-                          >
-                            Configure PIN
-                          </Button>
+                          <Col md={6}>
+                            <Form.Group>
+                              <Form.Label className="small fw-semibold">Annual Compensation (CTC)</Form.Label>
+                              <Form.Control 
+                                size="sm"
+                                type="text" 
+                                placeholder="e.g. ₹1.2 LPA / ₹3,50,000 PA"
+                                value={formData.annual_ctc}
+                                onChange={(e) => setFormData({ ...formData, annual_ctc: e.target.value })}
+                              />
+                            </Form.Group>
+                          </Col>
                         )}
-                      </div>
+                        <Col md={6}>
+                          <Form.Group>
+                            <Form.Label className="small fw-semibold">Letter Issue Date</Form.Label>
+                            <Form.Control 
+                              size="sm"
+                              type="date" 
+                              value={formData.issue_date}
+                              onChange={(e) => setFormData({ ...formData, issue_date: e.target.value })}
+                            />
+                          </Form.Group>
+                        </Col>
+                      </Row>
+                    </div>
+                  </div>
 
+                  {/* Section 4: Signatory & Custom Terms */}
+                  <div className="editable-section-card">
+                    <div className="editable-section-header">
+                      <FaFileSignature className="text-primary" size={13} />
+                      <span>4. Signatory &amp; Custom Terms</span>
+                    </div>
+                    <div className="editable-section-body">
+                      <Row className="g-2">
+                        <Col md={6}>
+                          <Form.Group>
+                            <Form.Label className="small fw-semibold">Authorized Signatory Name</Form.Label>
+                            <Form.Control 
+                              size="sm"
+                              type="text" 
+                              value={formData.signatory_name}
+                              onChange={(e) => setFormData({ ...formData, signatory_name: e.target.value })}
+                            />
+                          </Form.Group>
+                        </Col>
+                        <Col md={6}>
+                          <Form.Group>
+                            <Form.Label className="small fw-semibold">Signatory Designation / Title</Form.Label>
+                            <Form.Control 
+                              size="sm"
+                              type="text" 
+                              value={formData.signatory_title}
+                              onChange={(e) => setFormData({ ...formData, signatory_title: e.target.value })}
+                            />
+                          </Form.Group>
+                        </Col>
+                        <Col md={12}>
+                          <Form.Group>
+                            <Form.Label className="small fw-semibold">Custom Clauses / Remarks (Optional)</Form.Label>
+                            <Form.Control 
+                              size="sm"
+                              as="textarea"
+                              rows={2}
+                              placeholder="Optional additional clauses, probation specifications, or custom remarks..."
+                              value={formData.custom_terms}
+                              onChange={(e) => setFormData({ ...formData, custom_terms: e.target.value })}
+                            />
+                          </Form.Group>
+                        </Col>
+                      </Row>
+                    </div>
+                  </div>
+
+                  {/* Section 5: Security & Digital Signature Authorization */}
+                  <div className="editable-section-card">
+                    <div className="editable-section-header justify-content-between">
+                      <div className="d-flex align-items-center gap-2">
+                        <FaLock className="text-primary" size={13} />
+                        <span>5. Official Seal &amp; Digital Signature Security</span>
+                      </div>
+                      {isPinConfigured ? (
+                        <Badge bg="success" className="py-1 px-2 small">
+                          <FaCheckCircle className="me-1" /> PIN Active
+                        </Badge>
+                      ) : (
+                        <Button 
+                          size="sm" 
+                          variant="outline-danger" 
+                          className="py-0 px-2 small"
+                          onClick={() => setShowPinModal(true)}
+                        >
+                          Configure PIN
+                        </Button>
+                      )}
+                    </div>
+                    <div className="editable-section-body">
                       <Form.Check 
                         type="switch"
                         id="modal-include-signature-switch"
-                        label={<span className="small fw-semibold text-secondary">Apply Official Stamp & Digital Signature to this document</span>}
+                        label={<span className="small fw-semibold text-secondary">Apply Official Stamp &amp; Digital Signature to this document</span>}
                         checked={Boolean(formData.include_signature && formData.include_stamp)}
                         onChange={(e) => {
                           const checked = e.target.checked;
@@ -1111,7 +1279,7 @@ export default function LetterList({ defaultType = 'all' }) {
                       />
 
                       {(formData.include_signature || formData.include_stamp) && (
-                        <div className="mt-3 p-3 bg-white rounded border">
+                        <div className="mt-2 p-3 bg-light rounded border">
                           {!isPinConfigured ? (
                             <Alert variant="warning" className="py-2 px-2 mb-0 small">
                               <FaExclamationTriangle className="me-1" />
@@ -1123,7 +1291,7 @@ export default function LetterList({ defaultType = 'all' }) {
                           ) : (
                             <Form.Group>
                               <Form.Label className="small fw-bold text-dark mb-1">
-                                Enter Security PIN to Authorize Stamp & Signature <span className="text-danger">*</span>
+                                Enter Security PIN to Authorize Stamp &amp; Signature <span className="text-danger">*</span>
                               </Form.Label>
                               <InputGroup size="sm">
                                 <InputGroup.Text><FaKey size={12} /></InputGroup.Text>
@@ -1145,8 +1313,8 @@ export default function LetterList({ defaultType = 'all' }) {
                           )}
                         </div>
                       )}
-                    </Card.Body>
-                  </Card>
+                    </div>
+                  </div>
                 </Col>
               )}
 
@@ -1237,12 +1405,12 @@ export default function LetterList({ defaultType = 'all' }) {
         </Form>
       </Modal>
 
-      {/* FULL PREVIEW & PRINT MODAL */}
+      {/* FULL PREVIEW & LIVE EDITABLE DETAILS MODAL */}
       <Modal 
         show={showPreviewModal} 
         onHide={() => setShowPreviewModal(false)} 
-        dialogClassName="letter-preview-modal"
-        fullscreen="md-down"
+        dialogClassName={previewViewMode === 'split' ? "letter-preview-modal-split" : "letter-preview-modal"}
+        fullscreen="lg-down"
         backdrop="static"
       >
         <Modal.Header closeButton onHide={() => setShowPreviewModal(false)} className="no-print bg-white border-bottom py-2 px-3">
@@ -1265,15 +1433,11 @@ export default function LetterList({ defaultType = 'all' }) {
                  previewLetter?.letter_type === 'joining' ? 'Joining Letter' : 'Offer Letter'}
               </Badge>
             </Modal.Title>
-            {previewLetter?.candidate_name && (
-              <span className="text-muted small d-none d-md-inline">
-                | {previewLetter.candidate_name}
-              </span>
-            )}
+            
             {previewLetter?.include_signature && previewLetter?.include_stamp ? (
               <Badge bg="success" className="d-flex align-items-center gap-1 py-1 px-2 small">
                 <FaShieldAlt size={10} />
-                <span>Digitally Signed & Stamped</span>
+                <span>Signed &amp; Stamped</span>
               </Badge>
             ) : (
               <Badge bg="secondary" className="d-flex align-items-center gap-1 py-1 px-2 small">
@@ -1281,6 +1445,34 @@ export default function LetterList({ defaultType = 'all' }) {
                 <span>Manual Ink Signature</span>
               </Badge>
             )}
+
+            {/* View Mode Selector: Split Screen / Preview Only / Details Only */}
+            <ButtonGroup size="sm" className="ms-2 d-none d-md-inline-flex">
+              <Button 
+                variant={previewViewMode === 'split' ? 'primary' : 'outline-secondary'}
+                onClick={() => setPreviewViewMode('split')}
+                className="d-flex align-items-center gap-1 py-1 px-2"
+              >
+                <FaColumns size={11} />
+                <span>Split Screen</span>
+              </Button>
+              <Button 
+                variant={previewViewMode === 'preview' ? 'primary' : 'outline-secondary'}
+                onClick={() => setPreviewViewMode('preview')}
+                className="d-flex align-items-center gap-1 py-1 px-2"
+              >
+                <FaDesktop size={11} />
+                <span>Document View</span>
+              </Button>
+              <Button 
+                variant={previewViewMode === 'details' ? 'primary' : 'outline-secondary'}
+                onClick={() => setPreviewViewMode('details')}
+                className="d-flex align-items-center gap-1 py-1 px-2"
+              >
+                <FaEdit size={11} />
+                <span>Edit Details</span>
+              </Button>
+            </ButtonGroup>
           </div>
 
           <div className="d-flex align-items-center gap-2 me-2">
@@ -1305,25 +1497,46 @@ export default function LetterList({ defaultType = 'all' }) {
                 title="Authorize stamp and signature with PIN"
               >
                 <FaKey size={11} />
-                <span className="d-none d-sm-inline">Authorize Seal & Sign</span>
+                <span className="d-none d-sm-inline">Authorize Seal</span>
               </Button>
             )}
 
-            <div className="d-flex align-items-center gap-1 me-2 d-none d-sm-flex">
-              <span className="text-secondary small me-1">Scale:</span>
-              {[0.75, 0.85, 1.0, 1.1].map(z => (
-                <Button 
-                  key={z}
-                  variant={previewModalZoom === z ? 'dark' : 'outline-secondary'}
-                  size="sm"
-                  className="py-0 px-2"
-                  style={{ fontSize: '11px', lineHeight: '18px' }}
-                  onClick={() => setPreviewModalZoom(z)}
-                >
-                  {Math.round(z * 100)}%
-                </Button>
-              ))}
-            </div>
+            {/* Save Changes button in header if in split or details mode */}
+            {(previewViewMode === 'split' || previewViewMode === 'details') && (
+              <Button 
+                variant="primary" 
+                size="sm" 
+                onClick={handleSavePreviewDetails}
+                disabled={previewSaving}
+                className="d-flex align-items-center gap-1 px-3 shadow-sm"
+              >
+                {previewSaving ? (
+                  <Spinner size="sm" animation="border" />
+                ) : (
+                  <FaSave size={12} />
+                )}
+                <span>Save Changes</span>
+              </Button>
+            )}
+
+            {/* Zoom / Scaling Controls for Document */}
+            {previewViewMode !== 'details' && (
+              <div className="d-flex align-items-center gap-1 me-1 d-none d-lg-flex">
+                <span className="text-secondary small me-1">Scale:</span>
+                {[0.7, 0.85, 1.0].map(z => (
+                  <Button 
+                    key={z}
+                    variant={previewModalZoom === z ? 'dark' : 'outline-secondary'}
+                    size="sm"
+                    className="py-0 px-2"
+                    style={{ fontSize: '11px', lineHeight: '18px' }}
+                    onClick={() => setPreviewModalZoom(z)}
+                  >
+                    {Math.round(z * 100)}%
+                  </Button>
+                ))}
+              </div>
+            )}
 
             <Button 
               variant="success" 
@@ -1348,25 +1561,369 @@ export default function LetterList({ defaultType = 'all' }) {
           </div>
         </Modal.Header>
 
-        <Modal.Body className="p-0 bg-secondary bg-opacity-10 d-flex flex-column align-items-center">
-          <div 
-            className="letter-zoom-viewport py-3"
-            style={{
-              transform: `scale(${previewModalZoom})`,
-              marginBottom: previewModalZoom < 1 ? `-${Math.round((1 - previewModalZoom) * 1150)}px` : '0px'
-            }}
-          >
-            <div className="letter-preview-print-area">
-              {renderLetterTemplate(previewLetter)}
-            </div>
-          </div>
+        <Modal.Body className="p-0">
+          <Row className="g-0">
+            {/* EDITABLE LETTER DETAILS SECTION */}
+            {(previewViewMode === 'split' || previewViewMode === 'details') && previewFormData && (
+              <Col 
+                xs={12} 
+                lg={previewViewMode === 'split' ? 5 : 12}
+                className="p-3"
+                style={{ 
+                  maxHeight: '84vh', 
+                  overflowY: 'auto', 
+                  background: '#f8fafc',
+                  borderRight: previewViewMode === 'split' ? '1px solid #cbd5e1' : 'none' 
+                }}
+              >
+                <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                  <div>
+                    <h6 className="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                      <FaEdit className="text-primary" />
+                      <span>Editable Letter Details Section</span>
+                    </h6>
+                    <span className="text-muted small">Edit any field below to update this document in real time</span>
+                  </div>
+                  <Button 
+                    variant="primary" 
+                    size="sm" 
+                    onClick={handleSavePreviewDetails}
+                    disabled={previewSaving}
+                    className="d-flex align-items-center gap-1 shadow-sm"
+                  >
+                    {previewSaving ? <Spinner size="sm" animation="border" /> : <FaSave size={12} />}
+                    <span>Save</span>
+                  </Button>
+                </div>
+
+                {/* Candidate & Recipient Information */}
+                <div className="editable-section-card">
+                  <div className="editable-section-header">
+                    <FaUser className="text-primary" size={13} />
+                    <span>Candidate &amp; Recipient Information</span>
+                  </div>
+                  <div className="editable-section-body">
+                    <Row className="g-2">
+                      <Col md={12}>
+                        <Form.Group>
+                          <Form.Label className="small fw-semibold">Candidate Full Name *</Form.Label>
+                          <Form.Control 
+                            size="sm"
+                            type="text" 
+                            value={previewFormData.candidate_name}
+                            onChange={(e) => setPreviewFormData({ ...previewFormData, candidate_name: e.target.value })}
+                            required
+                          />
+                        </Form.Group>
+                      </Col>
+                      <Col md={6}>
+                        <Form.Group>
+                          <Form.Label className="small fw-semibold">Email Address</Form.Label>
+                          <Form.Control 
+                            size="sm"
+                            type="email" 
+                            value={previewFormData.candidate_email}
+                            onChange={(e) => setPreviewFormData({ ...previewFormData, candidate_email: e.target.value })}
+                          />
+                        </Form.Group>
+                      </Col>
+                      <Col md={6}>
+                        <Form.Group>
+                          <Form.Label className="small fw-semibold">Phone Number</Form.Label>
+                          <Form.Control 
+                            size="sm"
+                            type="text" 
+                            value={previewFormData.candidate_phone}
+                            onChange={(e) => setPreviewFormData({ ...previewFormData, candidate_phone: e.target.value })}
+                          />
+                        </Form.Group>
+                      </Col>
+                      <Col md={12}>
+                        <Form.Group>
+                          <Form.Label className="small fw-semibold">Residential Address</Form.Label>
+                          <Form.Control 
+                            size="sm"
+                            type="text" 
+                            value={previewFormData.candidate_address}
+                            onChange={(e) => setPreviewFormData({ ...previewFormData, candidate_address: e.target.value })}
+                          />
+                        </Form.Group>
+                      </Col>
+                    </Row>
+                  </div>
+                </div>
+
+                {/* Position, Department & Location */}
+                <div className="editable-section-card">
+                  <div className="editable-section-header">
+                    <FaBriefcase className="text-primary" size={13} />
+                    <span>Position, Department &amp; Location</span>
+                  </div>
+                  <div className="editable-section-body">
+                    <Row className="g-2">
+                      <Col md={6}>
+                        <Form.Group>
+                          <Form.Label className="small fw-semibold">Designation / Role *</Form.Label>
+                          <Form.Control 
+                            size="sm"
+                            type="text" 
+                            value={previewFormData.position}
+                            onChange={(e) => setPreviewFormData({ ...previewFormData, position: e.target.value })}
+                            required
+                          />
+                        </Form.Group>
+                      </Col>
+                      <Col md={6}>
+                        <Form.Group>
+                          <Form.Label className="small fw-semibold">Department</Form.Label>
+                          <Form.Control 
+                            size="sm"
+                            type="text" 
+                            value={previewFormData.department}
+                            onChange={(e) => setPreviewFormData({ ...previewFormData, department: e.target.value })}
+                          />
+                        </Form.Group>
+                      </Col>
+                      <Col md={12}>
+                        <Form.Group>
+                          <Form.Label className="small fw-semibold">Work Location</Form.Label>
+                          <Form.Control 
+                            size="sm"
+                            type="text" 
+                            value={previewFormData.work_location}
+                            onChange={(e) => setPreviewFormData({ ...previewFormData, work_location: e.target.value })}
+                          />
+                        </Form.Group>
+                      </Col>
+                    </Row>
+                  </div>
+                </div>
+
+                {/* Timeline & Compensation */}
+                <div className="editable-section-card">
+                  <div className="editable-section-header">
+                    <FaCalendarAlt className="text-primary" size={13} />
+                    <span>Timeline &amp; Compensation</span>
+                  </div>
+                  <div className="editable-section-body">
+                    <Row className="g-2">
+                      <Col md={6}>
+                        <Form.Group>
+                          <Form.Label className="small fw-semibold">Joining / Commencement Date *</Form.Label>
+                          <Form.Control 
+                            size="sm"
+                            type="date" 
+                            value={previewFormData.joining_date}
+                            onChange={(e) => setPreviewFormData({ ...previewFormData, joining_date: e.target.value })}
+                            required
+                          />
+                        </Form.Group>
+                      </Col>
+                      {previewLetter?.letter_type === 'experience' ? (
+                        <Col md={6}>
+                          <Form.Group>
+                            <Form.Label className="small fw-semibold">Relieving / End Date</Form.Label>
+                            <Form.Control 
+                              size="sm"
+                              type="date" 
+                              value={previewFormData.end_date}
+                              onChange={(e) => setPreviewFormData({ ...previewFormData, end_date: e.target.value })}
+                            />
+                          </Form.Group>
+                        </Col>
+                      ) : (
+                        <Col md={6}>
+                          <Form.Group>
+                            <Form.Label className="small fw-semibold">Annual Compensation (CTC)</Form.Label>
+                            <Form.Control 
+                              size="sm"
+                              type="text" 
+                              value={previewFormData.annual_ctc}
+                              onChange={(e) => setPreviewFormData({ ...previewFormData, annual_ctc: e.target.value })}
+                            />
+                          </Form.Group>
+                        </Col>
+                      )}
+                      <Col md={6}>
+                        <Form.Group>
+                          <Form.Label className="small fw-semibold">Issue Date</Form.Label>
+                          <Form.Control 
+                            size="sm"
+                            type="date" 
+                            value={previewFormData.issue_date}
+                            onChange={(e) => setPreviewFormData({ ...previewFormData, issue_date: e.target.value })}
+                          />
+                        </Form.Group>
+                      </Col>
+                    </Row>
+                  </div>
+                </div>
+
+                {/* Signatory & Special Terms */}
+                <div className="editable-section-card">
+                  <div className="editable-section-header">
+                    <FaFileSignature className="text-primary" size={13} />
+                    <span>Signatory &amp; Custom Terms</span>
+                  </div>
+                  <div className="editable-section-body">
+                    <Row className="g-2">
+                      <Col md={6}>
+                        <Form.Group>
+                          <Form.Label className="small fw-semibold">Signatory Name</Form.Label>
+                          <Form.Control 
+                            size="sm"
+                            type="text" 
+                            value={previewFormData.signatory_name}
+                            onChange={(e) => setPreviewFormData({ ...previewFormData, signatory_name: e.target.value })}
+                          />
+                        </Form.Group>
+                      </Col>
+                      <Col md={6}>
+                        <Form.Group>
+                          <Form.Label className="small fw-semibold">Signatory Title</Form.Label>
+                          <Form.Control 
+                            size="sm"
+                            type="text" 
+                            value={previewFormData.signatory_title}
+                            onChange={(e) => setPreviewFormData({ ...previewFormData, signatory_title: e.target.value })}
+                          />
+                        </Form.Group>
+                      </Col>
+                      <Col md={12}>
+                        <Form.Group>
+                          <Form.Label className="small fw-semibold">Custom Clauses or Remarks (Optional)</Form.Label>
+                          <Form.Control 
+                            size="sm"
+                            as="textarea"
+                            rows={2}
+                            placeholder="Optional additional clauses, probation specifications, or custom remarks..."
+                            value={previewFormData.custom_terms}
+                            onChange={(e) => setPreviewFormData({ ...previewFormData, custom_terms: e.target.value })}
+                          />
+                        </Form.Group>
+                      </Col>
+                    </Row>
+                  </div>
+                </div>
+
+                {/* Digital Stamp & Signature Security */}
+                <div className="editable-section-card">
+                  <div className="editable-section-header justify-content-between">
+                    <div className="d-flex align-items-center gap-2">
+                      <FaLock className="text-primary" size={13} />
+                      <span>Seal &amp; Signature Authorization</span>
+                    </div>
+                    {isPinConfigured ? (
+                      <Badge bg="success" className="py-1 px-2 small">PIN Configured</Badge>
+                    ) : (
+                      <Button size="sm" variant="outline-danger" className="py-0 px-2 small" onClick={() => setShowPinModal(true)}>
+                        Set PIN
+                      </Button>
+                    )}
+                  </div>
+                  <div className="editable-section-body">
+                    <Form.Check 
+                      type="switch"
+                      id="preview-include-signature-switch"
+                      label={<span className="small fw-semibold text-secondary">Apply Official Stamp &amp; Digital Signature</span>}
+                      checked={Boolean(previewFormData.include_signature && previewFormData.include_stamp)}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setPreviewFormData(prev => ({
+                          ...prev,
+                          include_signature: checked,
+                          include_stamp: checked
+                        }));
+                      }}
+                    />
+
+                    {(previewFormData.include_signature || previewFormData.include_stamp) && !previewLetter?.include_signature && (
+                      <div className="mt-2 p-2 bg-white rounded border">
+                        <Form.Group>
+                          <Form.Label className="small fw-bold text-dark mb-1">
+                            Enter Security PIN to Authorize Stamp &amp; Signature *
+                          </Form.Label>
+                          <InputGroup size="sm">
+                            <InputGroup.Text><FaKey size={12} /></InputGroup.Text>
+                            <Form.Control 
+                              type={previewFormPin ? 'text' : 'password'}
+                              maxLength={8}
+                              placeholder="Enter Security PIN"
+                              value={previewFormData.security_pin || ''}
+                              onChange={(e) => setPreviewFormData(prev => ({ ...prev, security_pin: e.target.value }))}
+                            />
+                            <Button variant="outline-secondary" onClick={() => setPreviewFormPin(v => !v)}>
+                              {previewFormPin ? <FaEyeSlash size={12} /> : <FaEye size={12} />}
+                            </Button>
+                          </InputGroup>
+                        </Form.Group>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="d-grid mt-3">
+                  <Button 
+                    variant="primary" 
+                    size="sm" 
+                    onClick={handleSavePreviewDetails}
+                    disabled={previewSaving}
+                    className="d-flex align-items-center justify-content-center gap-2 py-2 shadow-sm"
+                  >
+                    {previewSaving ? <Spinner size="sm" animation="border" /> : <FaSave size={13} />}
+                    <span className="fw-semibold">Save Letter Details</span>
+                  </Button>
+                </div>
+              </Col>
+            )}
+
+            {/* REAL-TIME PREVIEW DOCUMENT DISPLAY */}
+            {previewViewMode !== 'details' && (
+              <Col 
+                xs={12} 
+                lg={previewViewMode === 'split' ? 7 : 12}
+                className="d-flex flex-column align-items-center"
+                style={{ 
+                  background: '#cbd5e1', 
+                  maxHeight: '84vh', 
+                  overflowY: 'auto',
+                  overflowX: 'auto',
+                  padding: '24px 10px 40px' 
+                }}
+              >
+                <div 
+                  className="letter-zoom-viewport"
+                  style={{
+                    transform: `scale(${previewModalZoom})`,
+                    marginBottom: previewModalZoom < 1 ? `-${Math.round((1 - previewModalZoom) * 1150)}px` : '0px'
+                  }}
+                >
+                  <div className="letter-preview-print-area">
+                    {renderLetterTemplate(previewFormData || previewLetter)}
+                  </div>
+                </div>
+              </Col>
+            )}
+          </Row>
         </Modal.Body>
 
         <Modal.Footer className="no-print bg-white border-top py-2 px-3 d-flex justify-content-between align-items-center">
           <div className="text-muted small">
-            <span className="fw-semibold text-dark">Document:</span> A4 Sheet (210mm × 297mm) • {previewLetter?.candidate_name || 'Official Letter'}
+            <span className="fw-semibold text-dark">Document:</span> A4 Sheet (210mm × 297mm) • {previewFormData?.candidate_name || previewLetter?.candidate_name || 'Official Letter'}
           </div>
           <div className="d-flex align-items-center gap-2">
+            {(previewViewMode === 'split' || previewViewMode === 'details') && (
+              <Button 
+                variant="primary" 
+                size="sm" 
+                onClick={handleSavePreviewDetails}
+                disabled={previewSaving}
+                className="d-flex align-items-center gap-1 px-3 shadow-sm"
+              >
+                {previewSaving ? <Spinner size="sm" animation="border" /> : <FaSave size={12} />}
+                <span>Save Details</span>
+              </Button>
+            )}
             <Button 
               variant="secondary" 
               size="sm" 
@@ -1502,7 +2059,7 @@ export default function LetterList({ defaultType = 'all' }) {
           <Modal.Header closeButton onHide={() => setShowAuthModal(false)}>
             <Modal.Title className="fs-6 fw-bold d-flex align-items-center gap-2 text-dark">
               <FaShieldAlt className="text-success" />
-              <span>Authorize Stamp & Signature</span>
+              <span>Authorize Stamp &amp; Signature</span>
             </Modal.Title>
           </Modal.Header>
 
