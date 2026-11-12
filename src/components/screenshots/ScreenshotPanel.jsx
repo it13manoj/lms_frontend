@@ -19,12 +19,28 @@ const API_ORIGIN = (process.env.REACT_APP_API_URL || 'https://lms.parakshtech.co
 const getScreenshotSrc = (imagePath) => {
   if (!imagePath) return '';
   if (imagePath.startsWith('http') || imagePath.startsWith('data:')) return imagePath;
-  return `${API_ORIGIN}${imagePath.startsWith('/') ? '' : '/'}${imagePath}`;
+  const clean = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
+  // Prefer /api/uploads/ so Express serves it directly with CORS headers even in cross-origin/dev setups
+  const apiUploadPath = clean.startsWith('/uploads/') ? clean.replace('/uploads/', '/api/uploads/') : clean;
+  return `${API_ORIGIN}${apiUploadPath}`;
+};
+
+const handleScreenshotImgError = (e) => {
+  const img = e?.target;
+  if (!img || !img.src) return;
+  const currentSrc = img.src;
+  if (!img.dataset.triedDirect && currentSrc.includes('/api/uploads/')) {
+    img.dataset.triedDirect = 'true';
+    img.src = currentSrc.replace('/api/uploads/', '/uploads/');
+  } else if (!img.dataset.triedApi && currentSrc.includes('/uploads/') && !currentSrc.includes('/api/uploads/')) {
+    img.dataset.triedApi = 'true';
+    img.src = currentSrc.replace('/uploads/', '/api/uploads/');
+  }
 };
 
 const ScreenshotPanel = () => {
   const { user } = useAuth();
-  const isAdminOrHR = ['admin', 'hr', 'manager'].includes(user?.role);
+  const isAdminOrHR = ['admin', 'hr', 'manager'].includes(String(user?.role || '').toLowerCase());
   const isMobile = isMobileDevice();
 
   const initialIST = getISTNowParts();
@@ -614,6 +630,7 @@ const ScreenshotPanel = () => {
                       className="w-100 h-100"
                       style={{ objectFit: 'cover', cursor: 'pointer' }}
                       onClick={() => openPreview(item)}
+                      onError={handleScreenshotImgError}
                     />
 
                     {isAdminOrHR && (
@@ -652,7 +669,7 @@ const ScreenshotPanel = () => {
                         )}
                       </div>
                       <div className="text-muted small mt-1 d-flex justify-content-between">
-                        <span>{item.date}</span>
+                        <span>{item.date}{item.file_size_kb ? ` • ${item.file_size_kb} KB` : ''}</span>
                         <span className="font-monospace fw-semibold">{item.capture_time_formatted}</span>
                       </div>
                       {item.verified_by_name && (
@@ -719,6 +736,7 @@ const ScreenshotPanel = () => {
               src={getScreenshotSrc(previewItem.image_path)}
               alt="Screenshot preview"
               style={{ maxWidth: '100%', maxHeight: '72vh', objectFit: 'contain' }}
+              onError={handleScreenshotImgError}
             />
           )}
         </Modal.Body>
