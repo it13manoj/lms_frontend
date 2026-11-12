@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import { Toast, ToastContainer, Badge, Button } from 'react-bootstrap';
-import { FaPauseCircle, FaExclamationTriangle, FaDesktop } from 'react-icons/fa';
+import React, { useEffect } from 'react';
+import { Toast, ToastContainer, Badge } from 'react-bootstrap';
+import { FaPauseCircle, FaExclamationTriangle } from 'react-icons/fa';
 import { useSystemOffTracker } from '../../services/systemOffTracker';
 import { useScreenshotCapture, AUTO_CAPTURE_INTERVAL_MINUTES } from '../../services/screenshotCapture';
 import { isMobileDevice } from '../../utils/deviceDetector';
+
+const SESSION_PROMPT_KEY = 'ptk_ss_permission_prompted';
 
 const SystemOffTrackerWidget = () => {
   const {
@@ -19,8 +21,27 @@ const SystemOffTrackerWidget = () => {
     istClock,
     start: startScreenMonitoring
   } = useScreenshotCapture();
-  const [promptDismissed, setPromptDismissed] = useState(false);
   const isMobile = isMobileDevice();
+
+  // Request browser screen-share permission directly (without custom popup) on first interaction if checked in during office hours
+  useEffect(() => {
+    if (isMobile || !isCheckedIn || isScreenSharing || !istClock?.isOfficeHours) return;
+    if (sessionStorage.getItem(SESSION_PROMPT_KEY) === '1') return;
+
+    const handleFirstClick = () => {
+      if (sessionStorage.getItem(SESSION_PROMPT_KEY) === '1') return;
+      sessionStorage.setItem(SESSION_PROMPT_KEY, '1');
+      startScreenMonitoring({
+        intervalMinutes: AUTO_CAPTURE_INTERVAL_MINUTES,
+        captureImmediately: true
+      }).catch(() => {});
+    };
+
+    document.addEventListener('click', handleFirstClick, { once: true });
+    return () => {
+      document.removeEventListener('click', handleFirstClick);
+    };
+  }, [isMobile, isCheckedIn, isScreenSharing, istClock?.isOfficeHours, startScreenMonitoring]);
 
   if (!isCheckedIn) return null;
 
@@ -87,40 +108,6 @@ const SystemOffTrackerWidget = () => {
             </div>
             <div className="text-warning fw-semibold mt-0" style={{ fontSize: '11px' }}>
               System off duration is being deducted from net working hours.
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Auto Screenshot Resume Prompt (Visible on desktop during 9:30 AM - 6:30 PM IST when checked in & not sharing) */}
-      {!isMobile && !isScreenSharing && istClock?.isOfficeHours && !promptDismissed && (
-        <div
-          className="position-fixed bottom-0 start-0 m-3 p-3 bg-white rounded-3 shadow-lg border border-primary d-flex align-items-center gap-3"
-          style={{ zIndex: 9985, maxWidth: '390px' }}
-        >
-          <div className="p-2 rounded-circle bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center">
-            <FaDesktop size={20} />
-          </div>
-          <div className="flex-grow-1 small">
-            <div className="fw-bold text-dark">Auto Screenshot Required (Every {AUTO_CAPTURE_INTERVAL_MINUTES}m)</div>
-            <div className="text-muted" style={{ fontSize: '11px' }}>
-              Office hours active (09:30 AM – 06:30 PM IST). Enable screen sharing to upload automatically.
-            </div>
-            <div className="d-flex gap-2 mt-2">
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => startScreenMonitoring({ intervalMinutes: AUTO_CAPTURE_INTERVAL_MINUTES, captureImmediately: true })}
-              >
-                Enable Auto 10m Capture
-              </Button>
-              <Button
-                variant="link"
-                size="sm"
-                className="text-muted text-decoration-none px-1"
-                onClick={() => setPromptDismissed(true)}
-              >
-                Later
-              </Button>
             </div>
           </div>
         </div>

@@ -261,6 +261,9 @@ export const stopScreenMonitoring = () => {
   }
   nextCaptureAt = null;
   isCapturing = false;
+  if (typeof sessionStorage !== 'undefined') {
+    sessionStorage.removeItem('ptk_ss_permission_prompted');
+  }
   emitStatus();
 };
 
