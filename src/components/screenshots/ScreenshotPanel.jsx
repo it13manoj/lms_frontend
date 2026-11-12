@@ -5,13 +5,12 @@ import {
 } from 'react-bootstrap';
 import {
   FaCamera, FaCheckCircle, FaTimesCircle, FaTrash,
-  FaDesktop, FaStopCircle, FaPlayCircle, FaClock,
-  FaFilter, FaSearchPlus, FaSyncAlt, FaCalendarDay,
+  FaClock, FaFilter, FaSearchPlus, FaSyncAlt, FaCalendarDay,
   FaCalendarAlt, FaUsers, FaCheckDouble, FaDownload
 } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
-import { useScreenshotCapture, getISTNowParts, AUTO_CAPTURE_INTERVAL_MINUTES } from '../../services/screenshotCapture';
+import { getISTNowParts } from '../../services/screenshotCapture';
 import { checkDesktopAgentStatus, startDesktopAgent, DESKTOP_AGENT_DOWNLOAD_URL } from '../../services/desktopAgent';
 import { isMobileDevice } from '../../utils/deviceDetector';
 
@@ -87,17 +86,14 @@ const ScreenshotPanel = () => {
     }
   }, [isMobile, refreshAgentStatus]);
 
-  const {
-    isSharing,
-    isCapturing,
-    lastCapturedAt,
-    nextCaptureInSeconds,
-    lastError,
-    istClock,
-    start: startMonitoring,
-    stop: stopMonitoring,
-    captureNow
-  } = useScreenshotCapture();
+  const [istClock, setIstClock] = useState(() => getISTNowParts());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setIstClock(getISTNowParts());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const fetchScreenshots = useCallback(async () => {
     try {
@@ -144,35 +140,6 @@ const ScreenshotPanel = () => {
     window.addEventListener('ptk_screenshot_uploaded', onUploaded);
     return () => window.removeEventListener('ptk_screenshot_uploaded', onUploaded);
   }, [fetchScreenshots]);
-
-  const handleStartCapture = async () => {
-    setFeedback(null);
-    const res = await startMonitoring({
-      intervalMinutes: AUTO_CAPTURE_INTERVAL_MINUTES,
-      captureImmediately: true
-    });
-    if (!res.success && res.message) {
-      setFeedback({ type: 'warning', text: res.message });
-    } else if (res.success) {
-      setFeedback({
-        type: 'success',
-        text: `Auto screenshot started (every ${AUTO_CAPTURE_INTERVAL_MINUTES} mins, strictly 09:30 AM – 06:30 PM IST).`
-      });
-    }
-  };
-
-  const handleManualCapture = async () => {
-    setFeedback(null);
-    const res = await captureNow({
-      notes: 'Manual capture',
-      autoPrompt: true
-    });
-    if (res.success) {
-      setFeedback({ type: 'success', text: 'Screenshot captured and uploaded to server.' });
-    } else {
-      setFeedback({ type: 'warning', text: res.message || 'Could not capture screenshot.' });
-    }
-  };
 
   const handleVerifyOne = async (id, nextStatus, notes) => {
     try {
@@ -301,12 +268,6 @@ const ScreenshotPanel = () => {
         </Alert>
       )}
 
-      {lastError && (
-        <Alert variant="warning" className="py-2 small">
-          {lastError}
-        </Alert>
-      )}
-
       {/* Desktop Auto-Tracker (.exe) Setup & Live Status */}
       {!isMobile && (
         <Card className="shadow-sm border-0 mb-3 border-start border-4 border-primary">
@@ -348,89 +309,6 @@ const ScreenshotPanel = () => {
             </div>
           </Card.Body>
         </Card>
-      )}
-
-      {/* Employee / User Capture Controls (hidden when Desktop Agent is actively tracking) */}
-      {!(agentStatus.installed && agentStatus.tracking) && (
-      <Card className="shadow-sm border-0 mb-4">
-        <Card.Body className="d-flex flex-wrap justify-content-between align-items-center gap-3">
-          <div className="d-flex align-items-center gap-3">
-            <div
-              className={`p-3 rounded-circle ${isSharing ? 'bg-success bg-opacity-10 text-success' : 'bg-primary bg-opacity-10 text-primary'}`}
-            >
-              <FaDesktop size={24} />
-            </div>
-            <div>
-              <div className="fw-bold d-flex align-items-center gap-2">
-                <span>Work Screen Capture</span>
-                {isSharing ? (
-                  <Badge bg="success">Live Monitoring Active</Badge>
-                ) : (
-                  <Badge bg="secondary">Inactive</Badge>
-                )}
-              </div>
-              <div className="text-muted small">
-                {isMobile
-                  ? 'Desktop/Laptop browser required for automatic screen capture.'
-                  : isSharing
-                  ? `Uploading compressed screenshots automatically every ${AUTO_CAPTURE_INTERVAL_MINUTES} mins between 09:30 AM and 06:30 PM IST.`
-                  : `Auto-captures every ${AUTO_CAPTURE_INTERVAL_MINUTES} mins during office hours (09:30 AM – 06:30 PM IST).`}
-                {lastCapturedAt && (
-                  <span className="ms-2 text-success fw-semibold">
-                    (Last uploaded: {getISTNowParts(lastCapturedAt).time12})
-                  </span>
-                )}
-                {isSharing && nextCaptureInSeconds > 0 && istClock?.isOfficeHours && (
-                  <Badge bg="info" text="dark" className="ms-2 font-monospace">
-                    Next capture in {Math.floor(nextCaptureInSeconds / 60)}m {String(nextCaptureInSeconds % 60).padStart(2, '0')}s
-                  </Badge>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="d-flex align-items-center gap-2 flex-wrap">
-            <Badge bg="light" text="dark" className="border py-2 px-3">
-              ⏱ Auto: Every {AUTO_CAPTURE_INTERVAL_MINUTES} mins
-            </Badge>
-
-            {!isSharing ? (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleStartCapture}
-                disabled={isMobile || isCapturing}
-                className="d-flex align-items-center gap-1 px-3 py-2 fw-semibold"
-              >
-                <FaPlayCircle />
-                <span>Start Screen Monitoring</span>
-              </Button>
-            ) : (
-              <>
-                <Button
-                  variant="outline-primary"
-                  size="sm"
-                  onClick={handleManualCapture}
-                  disabled={!istClock.isOfficeHours || isCapturing}
-                  className="d-flex align-items-center gap-1 py-2"
-                >
-                  {isCapturing ? <Spinner size="sm" animation="border" /> : <FaCamera />}
-                  <span>Capture Now</span>
-                </Button>
-                <Button
-                  variant="outline-danger"
-                  size="sm"
-                  onClick={stopMonitoring}
-                  className="d-flex align-items-center gap-1 py-2"
-                >
-                  <FaStopCircle />
-                  <span>Stop</span>
-                </Button>
-              </>
-            )}
-          </div>
-        </Card.Body>
-      </Card>
       )}
 
       {/* Summary KPIs */}

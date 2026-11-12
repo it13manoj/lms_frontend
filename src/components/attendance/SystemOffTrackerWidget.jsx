@@ -3,15 +3,10 @@ import { Toast, ToastContainer, Badge } from 'react-bootstrap';
 import { FaPauseCircle, FaExclamationTriangle } from 'react-icons/fa';
 import api from '../../services/api';
 import { useSystemOffTracker, getISTDateStr } from '../../services/systemOffTracker';
-import { useScreenshotCapture, AUTO_CAPTURE_INTERVAL_MINUTES } from '../../services/screenshotCapture';
 import { checkDesktopAgentStatus, startDesktopAgent } from '../../services/desktopAgent';
-import { isMobileDevice } from '../../utils/deviceDetector';
-
-let promptedThisPageLoad = false;
 
 const SystemOffTrackerWidget = () => {
   const [initialStats, setInitialStats] = useState(null);
-  const [desktopAgentActive, setDesktopAgentActive] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -20,13 +15,8 @@ const SystemOffTrackerWidget = () => {
     const syncDesktopAgent = async () => {
       const status = await checkDesktopAgentStatus();
       if (!mounted) return;
-      if (status?.installed) {
-        setDesktopAgentActive(true);
-        if (!status.tracking) {
-          await startDesktopAgent({ token });
-        }
-      } else {
-        setDesktopAgentActive(false);
+      if (status?.installed && !status.tracking) {
+        await startDesktopAgent({ token });
       }
     };
     syncDesktopAgent();
@@ -60,45 +50,6 @@ const SystemOffTrackerWidget = () => {
     returnNotification,
     dismissNotification
   } = useSystemOffTracker(initialStats);
-
-  const {
-    isSharing: isScreenSharing,
-    istClock,
-    start: startScreenMonitoring
-  } = useScreenshotCapture();
-  const isMobile = isMobileDevice();
-
-  // Request browser screen-share permission directly (without custom popup) on first interaction ONLY if desktop agent is not active
-  useEffect(() => {
-    if (isMobile || desktopAgentActive || !isCheckedIn || isScreenSharing || !istClock?.isOfficeHours) return;
-    if (promptedThisPageLoad) return;
-
-    const handleFirstClick = () => {
-      if (promptedThisPageLoad) return;
-      promptedThisPageLoad = true;
-      startScreenMonitoring({
-        intervalMinutes: AUTO_CAPTURE_INTERVAL_MINUTES,
-        captureImmediately: true
-      })
-        .then((res) => {
-          if (!res?.success) {
-            setTimeout(() => {
-              promptedThisPageLoad = false;
-            }, 30000);
-          }
-        })
-        .catch(() => {
-          setTimeout(() => {
-            promptedThisPageLoad = false;
-          }, 30000);
-        });
-    };
-
-    document.addEventListener('click', handleFirstClick, { once: true, capture: true });
-    return () => {
-      document.removeEventListener('click', handleFirstClick, { capture: true });
-    };
-  }, [isMobile, desktopAgentActive, isCheckedIn, isScreenSharing, istClock?.isOfficeHours, startScreenMonitoring]);
 
   if (!isCheckedIn) return null;
 

@@ -437,13 +437,13 @@ const AttendanceTracker = () => {
 
       if (punchType === 'check-in') {
         startSystemOffTracking({ date: dateStr, checkInTime: timeStr, initialOffMinutes: 0, userId: user?.id });
-        if (!isUpdate && !isScreenSharing) {
+        if (!isUpdate) {
           checkDesktopAgentStatus()
             .then((st) => {
               if (st?.installed) {
                 return startDesktopAgent({ email: user?.email });
               }
-              return startScreenMonitoring({ intervalMinutes: 10, captureImmediately: true });
+              return null;
             })
             .catch(() => {});
         }
