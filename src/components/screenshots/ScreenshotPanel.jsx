@@ -7,11 +7,12 @@ import {
   FaCamera, FaCheckCircle, FaTimesCircle, FaTrash,
   FaDesktop, FaStopCircle, FaPlayCircle, FaClock,
   FaFilter, FaSearchPlus, FaSyncAlt, FaCalendarDay,
-  FaCalendarAlt, FaUsers, FaCheckDouble
+  FaCalendarAlt, FaUsers, FaCheckDouble, FaDownload
 } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import { useScreenshotCapture, getISTNowParts, AUTO_CAPTURE_INTERVAL_MINUTES } from '../../services/screenshotCapture';
+import { checkDesktopAgentStatus, startDesktopAgent, DESKTOP_AGENT_DOWNLOAD_URL } from '../../services/desktopAgent';
 import { isMobileDevice } from '../../utils/deviceDetector';
 
 const API_ORIGIN = (process.env.REACT_APP_API_URL || 'https://lms.parakshtech.com/api').replace(/\/api\/?$/, '');
@@ -61,6 +62,30 @@ const ScreenshotPanel = () => {
   const [previewItem, setPreviewItem] = useState(null);
   const [previewNotes, setPreviewNotes] = useState('');
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(null);
+  const [agentStatus, setAgentStatus] = useState({ installed: false, running: false, tracking: false, lastStatus: '' });
+  const [checkingAgent, setCheckingAgent] = useState(false);
+
+  const refreshAgentStatus = useCallback(async () => {
+    setCheckingAgent(true);
+    try {
+      const st = await checkDesktopAgentStatus();
+      if (st?.installed && !st.tracking && localStorage.getItem('token')) {
+        await startDesktopAgent({ email: user?.email });
+        const st2 = await checkDesktopAgentStatus();
+        setAgentStatus(st2);
+      } else {
+        setAgentStatus(st);
+      }
+    } finally {
+      setCheckingAgent(false);
+    }
+  }, [user?.email]);
+
+  useEffect(() => {
+    if (!isMobile) {
+      refreshAgentStatus();
+    }
+  }, [isMobile, refreshAgentStatus]);
 
   const {
     isSharing,
@@ -280,6 +305,49 @@ const ScreenshotPanel = () => {
         <Alert variant="warning" className="py-2 small">
           {lastError}
         </Alert>
+      )}
+
+      {/* Desktop Auto-Tracker (.exe) Setup & Live Status */}
+      {!isMobile && (
+        <Card className="shadow-sm border-0 mb-3 border-start border-4 border-primary">
+          <Card.Body className="d-flex flex-wrap justify-content-between align-items-center gap-3 py-3">
+            <div>
+              <div className="fw-bold d-flex align-items-center gap-2 flex-wrap">
+                <span>Windows Desktop Auto-Tracker (.exe)</span>
+                {agentStatus.installed && agentStatus.tracking ? (
+                  <Badge bg="success">Connected & Auto-Tracking (No Browser Popup)</Badge>
+                ) : agentStatus.installed ? (
+                  <Badge bg="info" text="dark">Installed & Ready</Badge>
+                ) : (
+                  <Badge bg="warning" text="dark">Not Running on This PC</Badge>
+                )}
+              </div>
+              <div className="text-muted small mt-1">
+                {agentStatus.installed && agentStatus.tracking
+                  ? `Status: ${agentStatus.lastStatus || 'Active — uploading silently every 10 mins (09:30 AM – 06:30 PM IST). Stops automatically on LMS logout.'}`
+                  : 'One-time setup: Download & run ParakshTechTracker.exe once. It auto-starts when you log into LMS, captures silently every 10 mins (09:30 AM – 06:30 PM IST) with zero browser popups, and stops on logout.'}
+              </div>
+            </div>
+            <div className="d-flex align-items-center gap-2 flex-wrap">
+              <Button
+                variant="outline-secondary"
+                size="sm"
+                onClick={refreshAgentStatus}
+                disabled={checkingAgent}
+              >
+                <FaSyncAlt className={checkingAgent ? 'fa-spin me-1' : 'me-1'} />
+                {checkingAgent ? 'Checking...' : 'Check Status'}
+              </Button>
+              <a
+                href={DESKTOP_AGENT_DOWNLOAD_URL}
+                download="ParakshTechTracker.exe"
+                className="btn btn-primary btn-sm fw-semibold d-inline-flex align-items-center gap-1"
+              >
+                <FaDownload /> Download Tracker (.exe)
+              </a>
+            </div>
+          </Card.Body>
+        </Card>
       )}
 
       {/* Employee / User Capture Controls */}

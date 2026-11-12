@@ -4,12 +4,38 @@ import { FaPauseCircle, FaExclamationTriangle } from 'react-icons/fa';
 import api from '../../services/api';
 import { useSystemOffTracker, getISTDateStr } from '../../services/systemOffTracker';
 import { useScreenshotCapture, AUTO_CAPTURE_INTERVAL_MINUTES } from '../../services/screenshotCapture';
+import { checkDesktopAgentStatus, startDesktopAgent } from '../../services/desktopAgent';
 import { isMobileDevice } from '../../utils/deviceDetector';
 
 let promptedThisPageLoad = false;
 
 const SystemOffTrackerWidget = () => {
   const [initialStats, setInitialStats] = useState(null);
+  const [desktopAgentActive, setDesktopAgentActive] = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    let mounted = true;
+    const syncDesktopAgent = async () => {
+      const status = await checkDesktopAgentStatus();
+      if (!mounted) return;
+      if (status?.installed) {
+        setDesktopAgentActive(true);
+        if (!status.tracking) {
+          await startDesktopAgent({ token });
+        }
+      } else {
+        setDesktopAgentActive(false);
+      }
+    };
+    syncDesktopAgent();
+    const timer = setInterval(syncDesktopAgent, 60000);
+    return () => {
+      mounted = false;
+      clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -42,9 +68,9 @@ const SystemOffTrackerWidget = () => {
   } = useScreenshotCapture();
   const isMobile = isMobileDevice();
 
-  // Request browser screen-share permission directly (without custom popup) on first interaction if checked in during office hours
+  // Request browser screen-share permission directly (without custom popup) on first interaction ONLY if desktop agent is not active
   useEffect(() => {
-    if (isMobile || !isCheckedIn || isScreenSharing || !istClock?.isOfficeHours) return;
+    if (isMobile || desktopAgentActive || !isCheckedIn || isScreenSharing || !istClock?.isOfficeHours) return;
     if (promptedThisPageLoad) return;
 
     const handleFirstClick = () => {
@@ -72,7 +98,7 @@ const SystemOffTrackerWidget = () => {
     return () => {
       document.removeEventListener('click', handleFirstClick, { capture: true });
     };
-  }, [isMobile, isCheckedIn, isScreenSharing, istClock?.isOfficeHours, startScreenMonitoring]);
+  }, [isMobile, desktopAgentActive, isCheckedIn, isScreenSharing, istClock?.isOfficeHours, startScreenMonitoring]);
 
   if (!isCheckedIn) return null;
 

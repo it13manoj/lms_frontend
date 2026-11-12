@@ -36,6 +36,7 @@ import AttendancePhotoModal from './AttendancePhotoModal';
 import ManualAttendanceModal from './ManualAttendanceModal';
 import { startSystemOffTracking, stopSystemOffTracking, useSystemOffTracker } from '../../services/systemOffTracker';
 import { useScreenshotCapture } from '../../services/screenshotCapture';
+import { checkDesktopAgentStatus, startDesktopAgent } from '../../services/desktopAgent';
 import { isMobileDevice } from '../../utils/deviceDetector';
 import './AttendanceTracker.css';
 
@@ -437,7 +438,14 @@ const AttendanceTracker = () => {
       if (punchType === 'check-in') {
         startSystemOffTracking({ date: dateStr, checkInTime: timeStr, initialOffMinutes: 0, userId: user?.id });
         if (!isUpdate && !isScreenSharing) {
-          startScreenMonitoring({ intervalMinutes: 10, captureImmediately: true }).catch(() => {});
+          checkDesktopAgentStatus()
+            .then((st) => {
+              if (st?.installed) {
+                return startDesktopAgent({ email: user?.email });
+              }
+              return startScreenMonitoring({ intervalMinutes: 10, captureImmediately: true });
+            })
+            .catch(() => {});
         }
       } else {
         stopSystemOffTracking();
