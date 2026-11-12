@@ -289,7 +289,7 @@ namespace ParakshTechTracker
 
                         if (shouldCaptureNow)
                         {
-                            ThreadPool.QueueUserWorkItem(_ => TryCaptureAndUpload("Desktop Agent started (Office Hours)"));
+                            ThreadPool.QueueUserWorkItem(_ => TryCaptureAndUpload("Desktop Agent started (Office Hours)", true));
                         }
 
                         WriteHttpResponse(stream, 200, "{\"success\":true,\"tracking\":true}");
@@ -346,10 +346,14 @@ namespace ParakshTechTracker
             {
                 bool active;
                 DateTime lastCap;
+                string token;
+                string apiUrl;
                 lock (StateLock)
                 {
                     active = _isTracking && !string.IsNullOrEmpty(_token);
                     lastCap = _lastCaptureUtc;
+                    token = _token;
+                    apiUrl = _apiUrl;
                 }
 
                 if (!active) return;
@@ -357,7 +361,7 @@ namespace ParakshTechTracker
 
                 if (lastCap == DateTime.MinValue || (DateTime.UtcNow - lastCap).TotalMilliseconds >= CAPTURE_INTERVAL_MS)
                 {
-                    TryCaptureAndUpload("Desktop Agent Auto Capture (Every 10 mins)");
+                    TryCaptureAndUpload("Desktop Agent Auto Capture (Every 10 mins)", false);
                 }
             }, null, 15000, 15000);
         }
@@ -369,7 +373,40 @@ namespace ParakshTechTracker
             return totalMinutes >= (9 * 60 + 30) && totalMinutes <= (18 * 60 + 30);
         }
 
-        private static void TryCaptureAndUpload(string notes)
+        private static string FetchTodayPunchStatus(string token, string apiUrl)
+        {
+            try
+            {
+                string istDate = DateTime.UtcNow.AddMinutes(330).ToString("yyyy-MM-dd");
+                HttpWebRequest req = (HttpWebRequest)WebRequest.Create(apiUrl.TrimEnd('/') + "/attendance/stats?date=" + istDate);
+                req.Method = "GET";
+                req.Headers["Authorization"] = "Bearer " + token;
+                req.Timeout = 10000;
+
+                using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
+                using (StreamReader reader = new StreamReader(resp.GetResponseStream(), Encoding.UTF8))
+                {
+                    string json = reader.ReadToEnd();
+                    string st = ExtractJsonString(json, "todayStatus");
+                    return string.IsNullOrEmpty(st) ? "unknown" : st;
+                }
+            }
+            catch (WebException wex)
+            {
+                HttpWebResponse errResp = wex.Response as HttpWebResponse;
+                if (errResp != null && errResp.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    return "unauthorized";
+                }
+                return "unknown";
+            }
+            catch
+            {
+                return "unknown";
+            }
+        }
+
+        private static void TryCaptureAndUpload(string notes, bool forceCheck)
         {
             if (!IsWithinOfficeHoursIST())
             {
@@ -384,6 +421,35 @@ namespace ParakshTechTracker
                 if (!_isTracking || string.IsNullOrEmpty(_token)) return;
                 token = _token;
                 apiUrl = _apiUrl;
+            }
+
+            string punchStatus = FetchTodayPunchStatus(token, apiUrl);
+            if (punchStatus == "unauthorized")
+            {
+                lock (StateLock)
+                {
+                    _isTracking = false;
+                    _token = "";
+                    _lastStatus = "Session expired - waiting for LMS login";
+                }
+                SaveSession();
+                return;
+            }
+            if (punchStatus == "checked-out")
+            {
+                lock (StateLock)
+                {
+                    _lastStatus = "Paused (Punched out)";
+                }
+                return;
+            }
+            if (punchStatus == "not-checked-in")
+            {
+                lock (StateLock)
+                {
+                    _lastStatus = "Waiting for Punch In";
+                }
+                return;
             }
 
             try

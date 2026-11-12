@@ -49,6 +49,7 @@ const ScreenshotPanel = () => {
   const [selectedMonth, setSelectedMonth] = useState(initialIST.monthStr);
   const [selectedEmployee, setSelectedEmployee] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [sortOrder, setSortOrder] = useState('desc'); // 'desc' | 'asc' (Punch-In -> Punch-Out)
 
   const [screenshots, setScreenshots] = useState([]);
   const [summary, setSummary] = useState({ total: 0, pending: 0, verified: 0, rejected: 0 });
@@ -226,6 +227,13 @@ const ScreenshotPanel = () => {
     if (st === 'rejected') return <Badge bg="danger">✕ Rejected</Badge>;
     return <Badge bg="warning" text="dark">⏳ Pending</Badge>;
   };
+
+  const displayedScreenshots = React.useMemo(() => {
+    if (sortOrder === 'asc') {
+      return [...screenshots].reverse();
+    }
+    return screenshots;
+  }, [screenshots, sortOrder]);
 
   const canDeleteFiltered =
     isAdminOrHR &&
@@ -451,6 +459,18 @@ const ScreenshotPanel = () => {
               </Form.Select>
             </Col>
 
+            <Col xs={12} sm={6} md={2}>
+              <Form.Label className="small fw-semibold text-muted mb-1">Sort Order</Form.Label>
+              <Form.Select
+                size="sm"
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value)}
+              >
+                <option value="desc">Newest First (Latest)</option>
+                <option value="asc">Punch-In → Punch-Out</option>
+              </Form.Select>
+            </Col>
+
             <Col xs={12} md={2} className="d-flex justify-content-md-end gap-2">
               <Button variant="outline-primary" size="sm" onClick={fetchScreenshots} disabled={loading}>
                 <FaSyncAlt className={loading ? 'fa-spin me-1' : 'me-1'} /> Refresh
@@ -562,7 +582,7 @@ const ScreenshotPanel = () => {
         </Card>
       ) : (
         <Row className="g-3">
-          {screenshots.map((item) => {
+          {displayedScreenshots.map((item) => {
             const isSelected = selectedIds.includes(item.id);
             return (
               <Col key={item.id} xs={12} sm={6} lg={4} xl={3}>
