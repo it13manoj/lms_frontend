@@ -4,7 +4,8 @@ import api from './api';
 const IST_OFFSET_MS = 330 * 60 * 1000; // +05:30 IST
 const OFFICE_START_MINUTES = 9 * 60 + 30;  // 09:30 AM
 const OFFICE_END_MINUTES = 18 * 60 + 30;   // 06:30 PM
-const DEFAULT_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+export const AUTO_CAPTURE_INTERVAL_MINUTES = 10;
+const DEFAULT_INTERVAL_MS = AUTO_CAPTURE_INTERVAL_MINUTES * 60 * 1000; // 10 minutes
 const MAX_WIDTH = 1280;
 const JPEG_QUALITY = 0.68;
 
@@ -13,6 +14,7 @@ let captureIntervalId = null;
 let isCapturing = false;
 let currentIntervalMs = DEFAULT_INTERVAL_MS;
 let lastCapturedAt = null;
+let nextCaptureAt = null;
 let lastCaptureStatus = null;
 let lastError = null;
 
@@ -58,6 +60,7 @@ const emitStatus = () => {
         isCapturing,
         intervalMinutes: Math.round(currentIntervalMs / 60000),
         lastCapturedAt,
+        nextCaptureAt,
         lastCaptureStatus,
         lastError
       }
@@ -145,6 +148,9 @@ export const captureAndUploadScreenshot = async ({ notes = '', autoPrompt = fals
     });
 
     lastCapturedAt = Date.now();
+    if (activeStream && activeStream.active) {
+      nextCaptureAt = lastCapturedAt + currentIntervalMs;
+    }
     lastCaptureStatus = 'Uploaded';
     lastError = null;
     emitStatus();
@@ -195,26 +201,34 @@ export const startScreenMonitoring = async ({ intervalMinutes = 10, captureImmed
     currentIntervalMs = Math.max(1, intervalMinutes) * 60 * 1000;
     if (captureIntervalId) clearInterval(captureIntervalId);
 
+    // Schedule next capture cleanly every 10 minutes; poll every 10s to prevent background timer drift
+    nextCaptureAt = Date.now() + currentIntervalMs;
     captureIntervalId = setInterval(() => {
       if (!activeStream || !activeStream.active) {
         stopScreenMonitoring();
         return;
       }
-      if (isWithinOfficeHoursIST()) {
-        captureAndUploadScreenshot({ notes: 'Auto capture (Office Hours)' });
-      } else {
-        lastError = 'Outside office hours (09:30 AM – 06:30 PM IST). Waiting for next shift window.';
+
+      const now = Date.now();
+      if (!isWithinOfficeHoursIST(now)) {
+        lastError = 'Outside office hours (09:30 AM – 06:30 PM IST). Capture paused until 09:30 AM.';
         emitStatus();
+        return;
       }
-    }, currentIntervalMs);
+
+      if (!lastCapturedAt || (nextCaptureAt && now >= nextCaptureAt)) {
+        nextCaptureAt = now + currentIntervalMs;
+        captureAndUploadScreenshot({ notes: 'Auto capture every 10 mins (Office Hours)' });
+      }
+    }, 10000);
 
     lastError = null;
     emitStatus();
 
     if (captureImmediately && isWithinOfficeHoursIST()) {
-      await captureAndUploadScreenshot({ notes: 'Initial office hours capture' });
+      await captureAndUploadScreenshot({ notes: 'Auto capture started (Office Hours)' });
     } else if (!isWithinOfficeHoursIST()) {
-      lastError = 'Screen monitoring armed. Captures will upload only during 09:30 AM – 06:30 PM IST.';
+      lastError = 'Screen monitoring armed. Auto-capture (every 10 mins) will run between 09:30 AM – 06:30 PM IST.';
       emitStatus();
     }
 
@@ -245,6 +259,7 @@ export const stopScreenMonitoring = () => {
     }
     activeStream = null;
   }
+  nextCaptureAt = null;
   isCapturing = false;
   emitStatus();
 };
@@ -265,10 +280,12 @@ export const useScreenshotCapture = () => {
     isCapturing,
     intervalMinutes: Math.round(currentIntervalMs / 60000),
     lastCapturedAt,
+    nextCaptureAt,
     lastCaptureStatus,
     lastError
   }));
   const [istClock, setIstClock] = useState(() => getISTNowParts());
+  const [nextCaptureInSeconds, setNextCaptureInSeconds] = useState(0);
 
   useEffect(() => {
     const onStatus = (e) => {
@@ -277,7 +294,13 @@ export const useScreenshotCapture = () => {
     window.addEventListener('ptk_screenshot_status', onStatus);
 
     const clockTimer = setInterval(() => {
-      setIstClock(getISTNowParts());
+      const now = Date.now();
+      setIstClock(getISTNowParts(now));
+      if (activeStream && activeStream.active && nextCaptureAt) {
+        setNextCaptureInSeconds(Math.max(0, Math.ceil((nextCaptureAt - now) / 1000)));
+      } else {
+        setNextCaptureInSeconds(0);
+      }
     }, 1000);
 
     return () => {
@@ -293,8 +316,10 @@ export const useScreenshotCapture = () => {
   return {
     ...state,
     istClock,
+    nextCaptureInSeconds,
     start,
     stop,
     captureNow
   };
 };
+

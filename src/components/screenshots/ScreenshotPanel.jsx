@@ -11,7 +11,7 @@ import {
 } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
-import { useScreenshotCapture, getISTNowParts } from '../../services/screenshotCapture';
+import { useScreenshotCapture, getISTNowParts, AUTO_CAPTURE_INTERVAL_MINUTES } from '../../services/screenshotCapture';
 import { isMobileDevice } from '../../utils/deviceDetector';
 
 const API_ORIGIN = (process.env.REACT_APP_API_URL || 'https://lms.parakshtech.com/api').replace(/\/api\/?$/, '');
@@ -33,7 +33,6 @@ const ScreenshotPanel = () => {
   const [selectedMonth, setSelectedMonth] = useState(initialIST.monthStr);
   const [selectedEmployee, setSelectedEmployee] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [captureIntervalMins, setCaptureIntervalMins] = useState(10);
 
   const [screenshots, setScreenshots] = useState([]);
   const [summary, setSummary] = useState({ total: 0, pending: 0, verified: 0, rejected: 0 });
@@ -51,6 +50,7 @@ const ScreenshotPanel = () => {
     isSharing,
     isCapturing,
     lastCapturedAt,
+    nextCaptureInSeconds,
     lastError,
     istClock,
     start: startMonitoring,
@@ -107,7 +107,7 @@ const ScreenshotPanel = () => {
   const handleStartCapture = async () => {
     setFeedback(null);
     const res = await startMonitoring({
-      intervalMinutes: captureIntervalMins,
+      intervalMinutes: AUTO_CAPTURE_INTERVAL_MINUTES,
       captureImmediately: true
     });
     if (!res.success && res.message) {
@@ -115,7 +115,7 @@ const ScreenshotPanel = () => {
     } else if (res.success) {
       setFeedback({
         type: 'success',
-        text: `Screen monitoring started (every ${captureIntervalMins} min, strictly 09:30 AM – 06:30 PM IST).`
+        text: `Auto screenshot started (every ${AUTO_CAPTURE_INTERVAL_MINUTES} mins, strictly 09:30 AM – 06:30 PM IST).`
       });
     }
   };
@@ -288,31 +288,26 @@ const ScreenshotPanel = () => {
                 {isMobile
                   ? 'Desktop/Laptop browser required for automatic screen capture.'
                   : isSharing
-                  ? `Uploading compressed screenshots every ${captureIntervalMins}m between 09:30 AM and 06:30 PM IST.`
-                  : 'Click "Start Screen Monitoring" to share your screen during office hours.'}
+                  ? `Uploading compressed screenshots automatically every ${AUTO_CAPTURE_INTERVAL_MINUTES} mins between 09:30 AM and 06:30 PM IST.`
+                  : `Auto-captures every ${AUTO_CAPTURE_INTERVAL_MINUTES} mins during office hours (09:30 AM – 06:30 PM IST).`}
                 {lastCapturedAt && (
                   <span className="ms-2 text-success fw-semibold">
                     (Last uploaded: {getISTNowParts(lastCapturedAt).time12})
                   </span>
+                )}
+                {isSharing && nextCaptureInSeconds > 0 && istClock?.isOfficeHours && (
+                  <Badge bg="info" text="dark" className="ms-2 font-monospace">
+                    Next capture in {Math.floor(nextCaptureInSeconds / 60)}m {String(nextCaptureInSeconds % 60).padStart(2, '0')}s
+                  </Badge>
                 )}
               </div>
             </div>
           </div>
 
           <div className="d-flex align-items-center gap-2 flex-wrap">
-            <Form.Select
-              size="sm"
-              style={{ width: '130px' }}
-              value={captureIntervalMins}
-              onChange={(e) => setCaptureIntervalMins(parseInt(e.target.value, 10) || 10)}
-              disabled={isSharing || isMobile}
-              aria-label="Screenshot capture interval"
-            >
-              <option value={5}>Every 5 mins</option>
-              <option value={10}>Every 10 mins</option>
-              <option value={15}>Every 15 mins</option>
-              <option value={30}>Every 30 mins</option>
-            </Form.Select>
+            <Badge bg="light" text="dark" className="border py-2 px-3">
+              ⏱ Auto: Every {AUTO_CAPTURE_INTERVAL_MINUTES} mins
+            </Badge>
 
             {!isSharing ? (
               <Button
@@ -790,3 +785,4 @@ const ScreenshotPanel = () => {
 };
 
 export default ScreenshotPanel;
+

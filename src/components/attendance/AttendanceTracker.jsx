@@ -170,6 +170,7 @@ const AttendanceTracker = () => {
   const {
     isSharing: isScreenSharing,
     istClock: screenIstClock,
+    nextCaptureInSeconds,
     start: startScreenMonitoring,
     stop: stopScreenMonitoring
   } = useScreenshotCapture();
@@ -435,6 +436,9 @@ const AttendanceTracker = () => {
 
       if (punchType === 'check-in') {
         startSystemOffTracking({ date: dateStr, checkInTime: timeStr, initialOffMinutes: 0, userId: user?.id });
+        if (!isUpdate && !isScreenSharing) {
+          startScreenMonitoring({ intervalMinutes: 10, captureImmediately: true }).catch(() => {});
+        }
       } else {
         stopSystemOffTracking();
       }
@@ -1327,7 +1331,7 @@ const AttendanceTracker = () => {
                                 </span>
                                 <Badge bg={isScreenSharing ? 'success' : 'secondary'} className="mt-1">
                                   {isScreenSharing
-                                    ? '🟢 Active (Auto 10m)'
+                                    ? `🟢 Auto 10m${nextCaptureInSeconds > 0 ? ` (Next: ${Math.floor(nextCaptureInSeconds / 60)}m ${String(nextCaptureInSeconds % 60).padStart(2, '0')}s)` : ''}`
                                     : screenIstClock?.isOfficeHours
                                     ? 'Paused'
                                     : 'Outside Office Hours'}
