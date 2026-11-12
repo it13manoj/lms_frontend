@@ -153,11 +153,16 @@ const captureFrameAsDataUrl = async (stream) => {
     try {
       const imageCapture = new window.ImageCapture(videoTrack);
       const bitmap = await imageCapture.grabFrame();
-      const dataUrl = drawSourceToJpegDataUrl(bitmap, bitmap.width, bitmap.height);
-      if (typeof bitmap.close === 'function') {
+      if (bitmap && bitmap.width > 0 && bitmap.height > 0) {
+        const dataUrl = drawSourceToJpegDataUrl(bitmap, bitmap.width, bitmap.height);
+        if (typeof bitmap.close === 'function') {
+          bitmap.close();
+        }
+        return dataUrl;
+      }
+      if (bitmap && typeof bitmap.close === 'function') {
         bitmap.close();
       }
-      return dataUrl;
     } catch (e) {
       // Fallback to persistent video element if ImageCapture.grabFrame fails
     }

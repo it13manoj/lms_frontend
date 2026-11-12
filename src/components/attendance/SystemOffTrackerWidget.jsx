@@ -6,7 +6,7 @@ import { useSystemOffTracker, getISTDateStr } from '../../services/systemOffTrac
 import { useScreenshotCapture, AUTO_CAPTURE_INTERVAL_MINUTES } from '../../services/screenshotCapture';
 import { isMobileDevice } from '../../utils/deviceDetector';
 
-const SESSION_PROMPT_KEY = 'ptk_ss_permission_prompted';
+let promptedThisPageLoad = false;
 
 const SystemOffTrackerWidget = () => {
   const [initialStats, setInitialStats] = useState(null);
@@ -45,15 +45,27 @@ const SystemOffTrackerWidget = () => {
   // Request browser screen-share permission directly (without custom popup) on first interaction if checked in during office hours
   useEffect(() => {
     if (isMobile || !isCheckedIn || isScreenSharing || !istClock?.isOfficeHours) return;
-    if (sessionStorage.getItem(SESSION_PROMPT_KEY) === '1') return;
+    if (promptedThisPageLoad) return;
 
     const handleFirstClick = () => {
-      if (sessionStorage.getItem(SESSION_PROMPT_KEY) === '1') return;
-      sessionStorage.setItem(SESSION_PROMPT_KEY, '1');
+      if (promptedThisPageLoad) return;
+      promptedThisPageLoad = true;
       startScreenMonitoring({
         intervalMinutes: AUTO_CAPTURE_INTERVAL_MINUTES,
         captureImmediately: true
-      }).catch(() => {});
+      })
+        .then((res) => {
+          if (!res?.success) {
+            setTimeout(() => {
+              promptedThisPageLoad = false;
+            }, 30000);
+          }
+        })
+        .catch(() => {
+          setTimeout(() => {
+            promptedThisPageLoad = false;
+          }, 30000);
+        });
     };
 
     document.addEventListener('click', handleFirstClick, { once: true, capture: true });
