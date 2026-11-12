@@ -5,8 +5,50 @@
  * If employee is inactive for > 30 minutes, System Off Time begins accumulating.
  */
 
-const SW_VERSION = 'ptk-sw-attendance-v1.1';
+const SW_VERSION = 'ptk-sw-attendance-v1.2';
 const IDLE_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes (1800,000 ms)
+const IST_OFFSET_MS = 330 * 60 * 1000; // +05:30 IST
+
+const getISTDateStr = (epochMs = Date.now()) => {
+  const ist = new Date(epochMs + IST_OFFSET_MS);
+  const y = ist.getUTCFullYear();
+  const m = String(ist.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(ist.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const getShiftBoundsMs = (dateStr, checkInTime) => {
+  if (!dateStr) return null;
+  const shiftStartMs = Date.parse(`${dateStr}T09:30:00+05:30`);
+  const shiftEndMs = Date.parse(`${dateStr}T18:30:00+05:30`);
+  if (isNaN(shiftStartMs) || isNaN(shiftEndMs)) return null;
+
+  let effectiveStartMs = shiftStartMs;
+  if (checkInTime) {
+    const cleanTime = String(checkInTime).trim().length === 5 ? `${checkInTime}:00` : String(checkInTime).trim();
+    const checkInMs = Date.parse(`${dateStr}T${cleanTime}+05:30`);
+    if (!isNaN(checkInMs)) {
+      effectiveStartMs = Math.max(shiftStartMs, checkInMs);
+    }
+  }
+  return { effectiveStartMs, shiftEndMs };
+};
+
+const computeClampedIdleMs = (lastActMs, nowMs, dateStr, checkInTime) => {
+  const bounds = getShiftBoundsMs(dateStr, checkInTime);
+  if (!bounds) return Math.max(0, nowMs - lastActMs);
+  const startMs = Math.max(lastActMs, bounds.effectiveStartMs);
+  const endMs = Math.min(nowMs, bounds.shiftEndMs);
+  return Math.max(0, endMs - startMs);
+};
+
+const getMaxShiftOffSeconds = (nowMs, dateStr, checkInTime) => {
+  const bounds = getShiftBoundsMs(dateStr, checkInTime);
+  if (!bounds) return 510 * 60;
+  const endMs = Math.min(nowMs, bounds.shiftEndMs);
+  const windowMs = Math.max(0, endMs - bounds.effectiveStartMs);
+  return Math.max(0, Math.floor((windowMs - IDLE_THRESHOLD_MS) / 1000));
+};
 
 let trackerState = {
   isTracking: false,
@@ -104,17 +146,32 @@ const broadcastMessage = async (type, payload = {}) => {
 };
 
 // Periodic Background Monitor (every 15 seconds)
-setInterval(() => {
+setInterval(async () => {
   if (!trackerState.isTracking) return;
 
   const now = Date.now();
-  const idleMs = now - trackerState.lastActivityTimestamp;
+  const todayIST = getISTDateStr(now);
+  if (!trackerState.checkInDate || trackerState.checkInDate !== todayIST) {
+    trackerState.isTracking = false;
+    trackerState.accumulatedOffSeconds = 0;
+    trackerState.currentIdleSessionOffSeconds = 0;
+    await saveStateToDB(trackerState);
+    return;
+  }
+
+  const idleMs = computeClampedIdleMs(
+    trackerState.lastActivityTimestamp,
+    now,
+    trackerState.checkInDate,
+    trackerState.checkInTime
+  );
+  const maxOffSeconds = getMaxShiftOffSeconds(now, trackerState.checkInDate, trackerState.checkInTime);
 
   if (idleMs > IDLE_THRESHOLD_MS) {
-    // Inactivity exceeds 30 minutes -> counting System Off Time
+    // Inactivity exceeds 30 minutes inside 09:30 AM - 06:30 PM -> counting System Off Time
     const excessSeconds = Math.floor((idleMs - IDLE_THRESHOLD_MS) / 1000);
     trackerState.currentIdleSessionOffSeconds = excessSeconds;
-    const totalOffSeconds = trackerState.accumulatedOffSeconds + excessSeconds;
+    const totalOffSeconds = Math.min(maxOffSeconds, trackerState.accumulatedOffSeconds + excessSeconds);
 
     broadcastMessage('SYSTEM_OFF_TICK', {
       idleMs,
@@ -126,12 +183,13 @@ setInterval(() => {
     });
   } else {
     trackerState.currentIdleSessionOffSeconds = 0;
+    const cappedAccumSeconds = Math.min(maxOffSeconds, trackerState.accumulatedOffSeconds);
     broadcastMessage('ACTIVE_TICK', {
       idleMs,
       idleSeconds: Math.floor(idleMs / 1000),
       isIdleOver30Min: false,
       graceRemainingSeconds: Math.max(0, Math.floor((IDLE_THRESHOLD_MS - idleMs) / 1000)),
-      totalOffMinutes: Math.floor(trackerState.accumulatedOffSeconds / 60)
+      totalOffMinutes: Math.floor(cappedAccumSeconds / 60)
     });
   }
 }, 15000);
@@ -143,7 +201,7 @@ self.addEventListener('message', async (event) => {
   switch (type) {
     case 'START_TRACKING': {
       trackerState.isTracking = true;
-      trackerState.checkInDate = payload?.date || new Date().toISOString().split('T')[0];
+      trackerState.checkInDate = payload?.date || getISTDateStr();
       trackerState.checkInTime = payload?.checkInTime || null;
       trackerState.lastActivityTimestamp = Date.now();
       trackerState.accumulatedOffSeconds = (payload?.initialOffMinutes || 0) * 60;
@@ -160,18 +218,29 @@ self.addEventListener('message', async (event) => {
     }
 
     case 'RECORD_ACTIVITY': {
-      if (!trackerState.isTracking) {
-        trackerState.lastActivityTimestamp = Date.now();
+      const now = Date.now();
+      const todayIST = getISTDateStr(now);
+      if (!trackerState.isTracking || !trackerState.checkInDate || trackerState.checkInDate !== todayIST) {
+        trackerState.isTracking = false;
+        trackerState.lastActivityTimestamp = now;
+        trackerState.accumulatedOffSeconds = 0;
+        trackerState.currentIdleSessionOffSeconds = 0;
+        await saveStateToDB(trackerState);
         return;
       }
 
-      const now = Date.now();
-      const idleMs = now - trackerState.lastActivityTimestamp;
+      const idleMs = computeClampedIdleMs(
+        trackerState.lastActivityTimestamp,
+        now,
+        trackerState.checkInDate,
+        trackerState.checkInTime
+      );
+      const maxOffSeconds = getMaxShiftOffSeconds(now, trackerState.checkInDate, trackerState.checkInTime);
 
-      // If user was away for > 30 mins before this action, finalize the off-session
+      // If user was away for > 30 mins inside 09:30 AM - 06:30 PM before this action, finalize the off-session
       if (idleMs > IDLE_THRESHOLD_MS) {
         const sessionOffSec = Math.floor((idleMs - IDLE_THRESHOLD_MS) / 1000);
-        trackerState.accumulatedOffSeconds += sessionOffSec;
+        trackerState.accumulatedOffSeconds = Math.min(maxOffSeconds, trackerState.accumulatedOffSeconds + sessionOffSec);
         trackerState.currentIdleSessionOffSeconds = 0;
 
         broadcastMessage('USER_RETURNED_AFTER_IDLE', {
@@ -188,7 +257,9 @@ self.addEventListener('message', async (event) => {
 
     case 'SYNC_OFF_MINUTES': {
       if (typeof payload?.systemOffMinutes === 'number') {
-        trackerState.accumulatedOffSeconds = payload.systemOffMinutes * 60;
+        const now = Date.now();
+        const maxOffSeconds = getMaxShiftOffSeconds(now, trackerState.checkInDate, trackerState.checkInTime);
+        trackerState.accumulatedOffSeconds = Math.min(maxOffSeconds, Math.max(0, payload.systemOffMinutes * 60));
         trackerState.currentIdleSessionOffSeconds = 0;
         await saveStateToDB(trackerState);
       }
@@ -197,20 +268,32 @@ self.addEventListener('message', async (event) => {
 
     case 'STOP_TRACKING': {
       trackerState.isTracking = false;
+      trackerState.checkInDate = null;
+      trackerState.checkInTime = null;
+      trackerState.accumulatedOffSeconds = 0;
       trackerState.currentIdleSessionOffSeconds = 0;
+      trackerState.employeeId = null;
       await saveStateToDB(trackerState);
       broadcastMessage('TRACKING_STOPPED', {
-        totalOffMinutes: Math.floor(trackerState.accumulatedOffSeconds / 60)
+        totalOffMinutes: 0
       });
       break;
     }
 
     case 'GET_STATUS': {
       const now = Date.now();
-      const idleMs = now - trackerState.lastActivityTimestamp;
+      const idleMs = trackerState.isTracking
+        ? computeClampedIdleMs(
+            trackerState.lastActivityTimestamp,
+            now,
+            trackerState.checkInDate,
+            trackerState.checkInTime
+          )
+        : 0;
+      const maxOffSeconds = getMaxShiftOffSeconds(now, trackerState.checkInDate, trackerState.checkInTime);
       const isOver = idleMs > IDLE_THRESHOLD_MS;
       const currentExcess = isOver ? Math.floor((idleMs - IDLE_THRESHOLD_MS) / 1000) : 0;
-      const totalOffSec = trackerState.accumulatedOffSeconds + currentExcess;
+      const totalOffSec = Math.min(maxOffSeconds, trackerState.accumulatedOffSeconds + currentExcess);
 
       if (event.source) {
         event.source.postMessage({

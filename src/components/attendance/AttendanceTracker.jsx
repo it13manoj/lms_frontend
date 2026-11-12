@@ -416,14 +416,17 @@ const AttendanceTracker = () => {
       };
 
       if (punchType === 'check-out') {
-        const storedOff = parseInt(localStorage.getItem('ptk_att_off_minutes'), 10) || 0;
+        const storedDate = localStorage.getItem('ptk_att_date');
+        const storedOff = storedDate === dateStr
+          ? (parseInt(localStorage.getItem('ptk_att_off_minutes'), 10) || 0)
+          : 0;
         payload.system_off_minutes = Math.max(liveSystemOffMinutes || 0, storedOff);
       }
 
       await api.post(endpoint, payload);
 
       if (punchType === 'check-in') {
-        startSystemOffTracking({ date: dateStr, checkInTime: timeStr, initialOffMinutes: 0 });
+        startSystemOffTracking({ date: dateStr, checkInTime: timeStr, initialOffMinutes: 0, userId: user?.id });
       } else {
         stopSystemOffTracking();
       }
