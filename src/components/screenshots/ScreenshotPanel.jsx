@@ -350,7 +350,8 @@ const ScreenshotPanel = () => {
         </Card>
       )}
 
-      {/* Employee / User Capture Controls */}
+      {/* Employee / User Capture Controls (hidden when Desktop Agent is actively tracking) */}
+      {!(agentStatus.installed && agentStatus.tracking) && (
       <Card className="shadow-sm border-0 mb-4">
         <Card.Body className="d-flex flex-wrap justify-content-between align-items-center gap-3">
           <div className="d-flex align-items-center gap-3">
@@ -430,6 +431,7 @@ const ScreenshotPanel = () => {
           </div>
         </Card.Body>
       </Card>
+      )}
 
       {/* Summary KPIs */}
       <Row className="g-3 mb-4">

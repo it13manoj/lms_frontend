@@ -7,6 +7,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -48,9 +49,16 @@ namespace ParakshTechTracker
         private static NotifyIcon _trayIcon;
         private static Mutex _singleInstanceMutex;
 
+        [DllImport("user32.dll")]
+        private static extern bool SetProcessDPIAware();
+
+        [DllImport("shcore.dll")]
+        private static extern int SetProcessDpiAwareness(int awareness);
+
         [STAThread]
         static void Main(string[] args)
         {
+            try { SetProcessDpiAwareness(2); } catch { try { SetProcessDPIAware(); } catch { } }
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | (SecurityProtocolType)3072;
 
             bool createdNew;
@@ -436,6 +444,21 @@ namespace ParakshTechTracker
             if (bounds.Width <= 0 || bounds.Height <= 0)
             {
                 bounds = Screen.PrimaryScreen.Bounds;
+            }
+            if (Screen.AllScreens != null && Screen.AllScreens.Length > 0)
+            {
+                int minX = int.MaxValue, minY = int.MaxValue, maxX = int.MinValue, maxY = int.MinValue;
+                foreach (Screen sc in Screen.AllScreens)
+                {
+                    if (sc.Bounds.Left < minX) minX = sc.Bounds.Left;
+                    if (sc.Bounds.Top < minY) minY = sc.Bounds.Top;
+                    if (sc.Bounds.Right > maxX) maxX = sc.Bounds.Right;
+                    if (sc.Bounds.Bottom > maxY) maxY = sc.Bounds.Bottom;
+                }
+                if (maxX > minX && maxY > minY)
+                {
+                    bounds = new Rectangle(minX, minY, maxX - minX, maxY - minY);
+                }
             }
 
             using (Bitmap raw = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format24bppRgb))
