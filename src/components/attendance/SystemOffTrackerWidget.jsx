@@ -1,20 +1,39 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Toast, ToastContainer, Badge } from 'react-bootstrap';
 import { FaPauseCircle, FaExclamationTriangle } from 'react-icons/fa';
-import { useSystemOffTracker } from '../../services/systemOffTracker';
+import api from '../../services/api';
+import { useSystemOffTracker, getISTDateStr } from '../../services/systemOffTracker';
 import { useScreenshotCapture, AUTO_CAPTURE_INTERVAL_MINUTES } from '../../services/screenshotCapture';
 import { isMobileDevice } from '../../utils/deviceDetector';
 
 const SESSION_PROMPT_KEY = 'ptk_ss_permission_prompted';
 
 const SystemOffTrackerWidget = () => {
+  const [initialStats, setInitialStats] = useState(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    let mounted = true;
+    api.get('/attendance/stats', { params: { date: getISTDateStr() } })
+      .then((res) => {
+        if (mounted && res?.data?.data) {
+          setInitialStats(res.data.data);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const {
     isCheckedIn,
     idleSeconds,
     isIdleOver30Min,
     returnNotification,
     dismissNotification
-  } = useSystemOffTracker();
+  } = useSystemOffTracker(initialStats);
 
   const {
     isSharing: isScreenSharing,
@@ -37,9 +56,9 @@ const SystemOffTrackerWidget = () => {
       }).catch(() => {});
     };
 
-    document.addEventListener('click', handleFirstClick, { once: true });
+    document.addEventListener('click', handleFirstClick, { once: true, capture: true });
     return () => {
-      document.removeEventListener('click', handleFirstClick);
+      document.removeEventListener('click', handleFirstClick, { capture: true });
     };
   }, [isMobile, isCheckedIn, isScreenSharing, istClock?.isOfficeHours, startScreenMonitoring]);
 

@@ -11,6 +11,10 @@ const JPEG_QUALITY = 0.68;
 
 let activeStream = null;
 let captureIntervalId = null;
+let workerTimer = null;
+let workerBlobUrl = null;
+let persistentVideo = null;
+let visibilityListenerAttached = false;
 let isCapturing = false;
 let currentIntervalMs = DEFAULT_INTERVAL_MS;
 let lastCapturedAt = null;
@@ -68,15 +72,44 @@ const emitStatus = () => {
   );
 };
 
-const captureFrameAsDataUrl = async (stream) => {
+const cleanupPersistentVideo = () => {
+  if (persistentVideo) {
+    try {
+      persistentVideo.pause();
+      persistentVideo.srcObject = null;
+      if (persistentVideo.parentNode) {
+        persistentVideo.parentNode.removeChild(persistentVideo);
+      }
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+    persistentVideo = null;
+  }
+};
+
+const ensurePersistentVideo = async (stream) => {
+  if (persistentVideo && persistentVideo.srcObject === stream && persistentVideo.readyState >= 2) {
+    if (persistentVideo.paused) {
+      await persistentVideo.play().catch(() => {});
+    }
+    return persistentVideo;
+  }
+
+  cleanupPersistentVideo();
   const video = document.createElement('video');
   video.muted = true;
   video.playsInline = true;
+  video.autoplay = true;
+  video.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:2px;height:2px;opacity:0.001;pointer-events:none;';
   video.srcObject = stream;
+  if (document.body) {
+    document.body.appendChild(video);
+  }
+  persistentVideo = video;
 
   await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('Screen video frame timeout')), 5000);
-    video.onloadedmetadata = () => {
+    const timer = setTimeout(() => reject(new Error('Screen video frame timeout')), 6000);
+    const onReady = () => {
       video.play()
         .then(() => {
           clearTimeout(timer);
@@ -87,27 +120,51 @@ const captureFrameAsDataUrl = async (stream) => {
           reject(err);
         });
     };
+    if (video.readyState >= 2) {
+      onReady();
+    } else {
+      video.onloadeddata = onReady;
+      video.onloadedmetadata = onReady;
+    }
   });
 
-  // Allow one render frame to settle
   await new Promise((r) => setTimeout(r, 150));
+  return video;
+};
 
-  const srcWidth = video.videoWidth || 1280;
-  const srcHeight = video.videoHeight || 720;
-  const scale = srcWidth > MAX_WIDTH ? MAX_WIDTH / srcWidth : 1;
-  const targetWidth = Math.max(1, Math.round(srcWidth * scale));
-  const targetHeight = Math.max(1, Math.round(srcHeight * scale));
+const drawSourceToJpegDataUrl = (source, srcWidth, srcHeight) => {
+  const safeW = srcWidth || 1280;
+  const safeH = srcHeight || 720;
+  const scale = safeW > MAX_WIDTH ? MAX_WIDTH / safeW : 1;
+  const targetWidth = Math.max(1, Math.round(safeW * scale));
+  const targetHeight = Math.max(1, Math.round(safeH * scale));
 
   const canvas = document.createElement('canvas');
   canvas.width = targetWidth;
   canvas.height = targetHeight;
   const ctx = canvas.getContext('2d');
-  ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+  ctx.drawImage(source, 0, 0, targetWidth, targetHeight);
+  return canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+};
 
-  const dataUrl = canvas.toDataURL('image/jpeg', JPEG_QUALITY);
-  video.pause();
-  video.srcObject = null;
-  return dataUrl;
+const captureFrameAsDataUrl = async (stream) => {
+  const videoTrack = stream?.getVideoTracks?.()[0];
+  if (videoTrack && typeof window !== 'undefined' && typeof window.ImageCapture === 'function') {
+    try {
+      const imageCapture = new window.ImageCapture(videoTrack);
+      const bitmap = await imageCapture.grabFrame();
+      const dataUrl = drawSourceToJpegDataUrl(bitmap, bitmap.width, bitmap.height);
+      if (typeof bitmap.close === 'function') {
+        bitmap.close();
+      }
+      return dataUrl;
+    } catch (e) {
+      // Fallback to persistent video element if ImageCapture.grabFrame fails
+    }
+  }
+
+  const video = await ensurePersistentVideo(stream);
+  return drawSourceToJpegDataUrl(video, video.videoWidth, video.videoHeight);
 };
 
 /**
@@ -161,6 +218,9 @@ export const captureAndUploadScreenshot = async ({ notes = '', autoPrompt = fals
     const msg = err?.response?.data?.message || err?.message || 'Failed to upload screenshot';
     lastError = msg;
     lastCaptureStatus = 'Failed';
+    if (activeStream && activeStream.active) {
+      nextCaptureAt = Date.now() + 60 * 1000;
+    }
     emitStatus();
     return { success: false, message: msg };
   } finally {
@@ -199,28 +259,11 @@ export const startScreenMonitoring = async ({ intervalMinutes = 10, captureImmed
     }
 
     currentIntervalMs = Math.max(1, intervalMinutes) * 60 * 1000;
-    if (captureIntervalId) clearInterval(captureIntervalId);
+    stopBackgroundScheduler();
 
-    // Schedule next capture cleanly every 10 minutes; poll every 10s to prevent background timer drift
+    // Schedule next capture cleanly every 10 minutes; use Web Worker + fallback interval to avoid Chrome background-tab throttling
     nextCaptureAt = Date.now() + currentIntervalMs;
-    captureIntervalId = setInterval(() => {
-      if (!activeStream || !activeStream.active) {
-        stopScreenMonitoring();
-        return;
-      }
-
-      const now = Date.now();
-      if (!isWithinOfficeHoursIST(now)) {
-        lastError = 'Outside office hours (09:30 AM – 06:30 PM IST). Capture paused until 09:30 AM.';
-        emitStatus();
-        return;
-      }
-
-      if (!lastCapturedAt || (nextCaptureAt && now >= nextCaptureAt)) {
-        nextCaptureAt = now + currentIntervalMs;
-        captureAndUploadScreenshot({ notes: 'Auto capture every 10 mins (Office Hours)' });
-      }
-    }, 10000);
+    startBackgroundScheduler();
 
     lastError = null;
     emitStatus();
@@ -243,14 +286,90 @@ export const startScreenMonitoring = async ({ intervalMinutes = 10, captureImmed
   }
 };
 
-/**
- * Stop screen monitoring and release media tracks
- */
-export const stopScreenMonitoring = () => {
+const runScheduledCaptureTick = () => {
+  if (!activeStream || !activeStream.active) {
+    stopScreenMonitoring();
+    return;
+  }
+
+  if (isCapturing) return;
+
+  const now = Date.now();
+  if (!isWithinOfficeHoursIST(now)) {
+    lastError = 'Outside office hours (09:30 AM – 06:30 PM IST). Capture paused until 09:30 AM.';
+    emitStatus();
+    return;
+  }
+
+  if (!lastCapturedAt || (nextCaptureAt && now >= nextCaptureAt)) {
+    nextCaptureAt = now + currentIntervalMs;
+    captureAndUploadScreenshot({ notes: 'Auto capture every 10 mins (Office Hours)' });
+  }
+};
+
+const handleVisibilityChange = () => {
+  if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+    runScheduledCaptureTick();
+  }
+};
+
+const stopBackgroundScheduler = () => {
   if (captureIntervalId) {
     clearInterval(captureIntervalId);
     captureIntervalId = null;
   }
+  if (workerTimer) {
+    try {
+      workerTimer.terminate();
+    } catch (e) {
+      // Ignore worker terminate errors
+    }
+    workerTimer = null;
+  }
+  if (workerBlobUrl) {
+    try {
+      URL.revokeObjectURL(workerBlobUrl);
+    } catch (e) {
+      // Ignore revoke errors
+    }
+    workerBlobUrl = null;
+  }
+  if (visibilityListenerAttached && typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    visibilityListenerAttached = false;
+  }
+};
+
+const startBackgroundScheduler = () => {
+  stopBackgroundScheduler();
+
+  if (typeof Worker !== 'undefined' && typeof Blob !== 'undefined') {
+    try {
+      const workerCode = 'setInterval(function(){ postMessage("tick"); }, 10000);';
+      const blob = new Blob([workerCode], { type: 'application/javascript' });
+      workerBlobUrl = URL.createObjectURL(blob);
+      workerTimer = new Worker(workerBlobUrl);
+      workerTimer.onmessage = () => runScheduledCaptureTick();
+    } catch (e) {
+      workerTimer = null;
+    }
+  }
+
+  // Keep a lightweight main-thread fallback interval as well
+  captureIntervalId = setInterval(runScheduledCaptureTick, 15000);
+
+  if (!visibilityListenerAttached && typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    visibilityListenerAttached = true;
+  }
+};
+
+/**
+ * Stop screen monitoring and release media tracks
+ */
+export const stopScreenMonitoring = () => {
+  stopBackgroundScheduler();
+  cleanupPersistentVideo();
   if (activeStream) {
     try {
       activeStream.getTracks().forEach((t) => t.stop());
