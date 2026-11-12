@@ -1,6 +1,6 @@
 const AGENT_BASE_URL = 'http://127.0.0.1:47891';
 const DEFAULT_API_URL = process.env.REACT_APP_API_URL || 'https://lms.parakshtech.com/api';
-export const DESKTOP_AGENT_DOWNLOAD_URL = '/downloads/ParakshTechTracker.exe';
+export const DESKTOP_AGENT_DOWNLOAD_URL = '/downloads/ParakshTechTracker.zip';
 
 const fetchWithTimeout = async (url, options = {}, timeoutMs = 1800) => {
   const controller = new AbortController();

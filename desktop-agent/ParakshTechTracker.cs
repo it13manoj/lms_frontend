@@ -13,6 +13,13 @@ using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
+[assembly: AssemblyTitle("ParakshTech LMS Tracker")]
+[assembly: AssemblyDescription("ParakshTech LMS Office Hours Screenshot Tracker")]
+[assembly: AssemblyCompany("ParakshTech")]
+[assembly: AssemblyProduct("ParakshTech LMS Tracker")]
+[assembly: AssemblyVersion("1.0.0.0")]
+[assembly: AssemblyFileVersion("1.0.0.0")]
+
 namespace ParakshTechTracker
 {
     static class Program

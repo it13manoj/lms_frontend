@@ -325,7 +325,7 @@ const ScreenshotPanel = () => {
               <div className="text-muted small mt-1">
                 {agentStatus.installed && agentStatus.tracking
                   ? `Status: ${agentStatus.lastStatus || 'Active — uploading silently every 10 mins (09:30 AM – 06:30 PM IST). Stops automatically on LMS logout.'}`
-                  : 'One-time setup: Download & run ParakshTechTracker.exe once. It auto-starts when you log into LMS, captures silently every 10 mins (09:30 AM – 06:30 PM IST) with zero browser popups, and stops on logout.'}
+                  : 'One-time setup: Download & extract ParakshTechTracker.zip, then double-click ParakshTechTracker.exe once (if SmartScreen appears, click More info -> Run anyway). It auto-starts on LMS login, captures silently every 10 mins (09:30 AM – 06:30 PM IST), and stops on logout.'}
               </div>
             </div>
             <div className="d-flex align-items-center gap-2 flex-wrap">
@@ -340,10 +340,10 @@ const ScreenshotPanel = () => {
               </Button>
               <a
                 href={DESKTOP_AGENT_DOWNLOAD_URL}
-                download="ParakshTechTracker.exe"
+                download="ParakshTechTracker.zip"
                 className="btn btn-primary btn-sm fw-semibold d-inline-flex align-items-center gap-1"
               >
-                <FaDownload /> Download Tracker (.exe)
+                <FaDownload /> Download Tracker (.zip)
               </a>
             </div>
           </Card.Body>
