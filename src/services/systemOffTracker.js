@@ -263,6 +263,9 @@ export const stopSystemOffTracking = () => {
   }
 
   postMessageToSW('STOP_TRACKING');
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('ptk_stop_screen_capture'));
+  }
 };
 
 /**

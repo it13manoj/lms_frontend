@@ -6,7 +6,7 @@ import {
   FaSignOutAlt, FaUser, FaBook, FaChartBar,
   FaUserCircle, FaCog, FaClipboardList, FaBuilding,
   FaUserTie, FaChevronDown, FaChevronRight,
-  FaHandHoldingUsd, FaRegCalendarCheck, FaVideo
+  FaHandHoldingUsd, FaRegCalendarCheck, FaVideo, FaCamera
 } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import companyLogo from '../../assets/parakshtech_logo.jpg';
@@ -67,6 +67,12 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         path: '/meetings', 
         icon: <FaVideo />, 
         label: 'Meetings',
+        allowedRoles: ['admin', 'hr', 'manager', 'sales', 'team', 'employee']
+      },
+      { 
+        path: '/screenshots', 
+        icon: <FaCamera />, 
+        label: 'Screenshots',
         allowedRoles: ['admin', 'hr', 'manager', 'sales', 'team', 'employee']
       }
     ];

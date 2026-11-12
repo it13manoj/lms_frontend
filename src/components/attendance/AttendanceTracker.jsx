@@ -35,6 +35,7 @@ import CameraPunchModal from './CameraPunchModal';
 import AttendancePhotoModal from './AttendancePhotoModal';
 import ManualAttendanceModal from './ManualAttendanceModal';
 import { startSystemOffTracking, stopSystemOffTracking, useSystemOffTracker } from '../../services/systemOffTracker';
+import { useScreenshotCapture } from '../../services/screenshotCapture';
 import { isMobileDevice } from '../../utils/deviceDetector';
 import './AttendanceTracker.css';
 
@@ -165,6 +166,13 @@ const AttendanceTracker = () => {
     systemOffMinutes: liveSystemOffMinutes,
     activityStatus
   } = useSystemOffTracker(myStats);
+
+  const {
+    isSharing: isScreenSharing,
+    istClock: screenIstClock,
+    start: startScreenMonitoring,
+    stop: stopScreenMonitoring
+  } = useScreenshotCapture();
 
   // Live ticking clock for accurate current time display
   useEffect(() => {
@@ -1310,6 +1318,50 @@ const AttendanceTracker = () => {
                               </span>
                             </div>
                           </div>
+
+                          {!isMobile && (
+                            <div className="d-flex justify-content-between align-items-center pt-2 mt-2 border-top">
+                              <div>
+                                <span className="text-muted d-block" style={{ fontSize: '11px' }}>
+                                  Screen Capture (9:30 AM – 6:30 PM):
+                                </span>
+                                <Badge bg={isScreenSharing ? 'success' : 'secondary'} className="mt-1">
+                                  {isScreenSharing
+                                    ? '🟢 Active (Auto 10m)'
+                                    : screenIstClock?.isOfficeHours
+                                    ? 'Paused'
+                                    : 'Outside Office Hours'}
+                                </Badge>
+                              </div>
+                              <div className="d-flex gap-1">
+                                {!isScreenSharing ? (
+                                  <Button
+                                    variant="outline-primary"
+                                    size="sm"
+                                    onClick={() => startScreenMonitoring({ intervalMinutes: 10, captureImmediately: true })}
+                                  >
+                                    <FaDesktop size={12} className="me-1" /> Enable
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    variant="outline-danger"
+                                    size="sm"
+                                    onClick={stopScreenMonitoring}
+                                  >
+                                    Stop
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="link"
+                                  size="sm"
+                                  className="text-decoration-none px-1"
+                                  onClick={() => navigate('/screenshots')}
+                                >
+                                  View
+                                </Button>
+                              </div>
+                            </div>
+                          )}
                         </div>
 
                         {isMobile && (

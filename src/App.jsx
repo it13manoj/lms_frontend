@@ -36,6 +36,7 @@ import MeetingPanel from './components/meetings/MeetingPanel';
 import GuestMeetingJoin from './components/meetings/GuestMeetingJoin';
 import MeetingDispatcher from './components/meetings/MeetingDispatcher';
 import LetterList from './components/letter/LetterList';
+import ScreenshotPanel from './components/screenshots/ScreenshotPanel';
 
 function App() {
   return (
@@ -70,6 +71,7 @@ function App() {
               
               {/* Attendance Routes */}
               <Route path="attendance" element={<AttendanceTracker />} />
+              <Route path="screenshots" element={<ScreenshotPanel />} />
               
               {/* Salary Routes */}
               <Route path="salary" element={<SalarySlip />} />
