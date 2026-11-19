@@ -286,7 +286,7 @@ const ScreenshotPanel = () => {
           <Card.Body className="d-flex flex-wrap justify-content-between align-items-center gap-3 py-3">
             <div>
               <div className="fw-bold d-flex align-items-center gap-2 flex-wrap">
-                <span>Windows Desktop Auto-Tracker (.exe)</span>
+                <span>ParakshTech HRMS Tracker (.exe)</span>
                 {agentStatus.installed && agentStatus.tracking ? (
                   <Badge bg="success">Connected & Auto-Tracking (No Browser Popup)</Badge>
                 ) : agentStatus.installed ? (
@@ -297,8 +297,8 @@ const ScreenshotPanel = () => {
               </div>
               <div className="text-muted small mt-1">
                 {agentStatus.installed && agentStatus.tracking
-                  ? `Status: ${agentStatus.lastStatus || 'Active — uploading silently every 10 mins (09:30 AM – 06:30 PM IST). Stops automatically on LMS logout.'}`
-                  : 'One-time setup: Download & extract ParakshTechTracker.zip, then double-click ParakshTechTracker.exe once (if SmartScreen appears, click More info -> Run anyway). It auto-starts on LMS login, captures silently every 10 mins (09:30 AM – 06:30 PM IST), and stops on logout.'}
+                  ? `Status: ${agentStatus.lastStatus || 'Active — uploading silently every 10 mins (09:30 AM – 06:30 PM IST). Exit locked during office hours. Stops automatically on LMS logout.'}`
+                  : 'One-time setup: Download & extract ParakshTechHRMSTracker.zip, then double-click ParakshTechHRMSTracker.exe once. It auto-starts on login, captures silently every 10 mins (09:30 AM – 06:30 PM IST), locks exit during office hours to prevent missed tracking, and stops on logout.'}
               </div>
             </div>
             <div className="d-flex align-items-center gap-2 flex-wrap">
@@ -313,7 +313,7 @@ const ScreenshotPanel = () => {
               </Button>
               <a
                 href={DESKTOP_AGENT_DOWNLOAD_URL}
-                download="ParakshTechTracker.zip"
+                download="ParakshTechHRMSTracker.zip"
                 className="btn btn-primary btn-sm fw-semibold d-inline-flex align-items-center gap-1"
               >
                 <FaDownload /> Download Tracker (.zip)

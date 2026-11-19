@@ -14,14 +14,16 @@ using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
-[assembly: AssemblyTitle("ParakshTech LMS Tracker")]
-[assembly: AssemblyDescription("ParakshTech LMS Office Hours Screenshot Tracker")]
+[assembly: AssemblyTitle("ParakshTech HRMS Tracker")]
+[assembly: AssemblyDescription("ParakshTech HRMS Office Hours Screenshot Tracker")]
 [assembly: AssemblyCompany("ParakshTech")]
-[assembly: AssemblyProduct("ParakshTech LMS Tracker")]
+[assembly: AssemblyProduct("ParakshTech HRMS Tracker")]
+[assembly: AssemblyCopyright("Copyright © ParakshTech 2026")]
+[assembly: AssemblyTrademark("ParakshTech")]
 [assembly: AssemblyVersion("1.0.0.0")]
 [assembly: AssemblyFileVersion("1.0.0.0")]
 
-namespace ParakshTechTracker
+namespace ParakshTechHRMSTracker
 {
     static class Program
     {
@@ -32,9 +34,9 @@ namespace ParakshTechTracker
 
         private static readonly string AppDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "ParakshTechTracker"
+            "ParakshTechHRMSTracker"
         );
-        private static readonly string InstalledExePath = Path.Combine(AppDir, "ParakshTechTracker.exe");
+        private static readonly string InstalledExePath = Path.Combine(AppDir, "ParakshTechHRMSTracker.exe");
         private static readonly string SessionFilePath = Path.Combine(AppDir, "session.json");
 
         private static readonly object StateLock = new object();
@@ -62,7 +64,7 @@ namespace ParakshTechTracker
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | (SecurityProtocolType)3072;
 
             bool createdNew;
-            _singleInstanceMutex = new Mutex(true, "Global\\ParakshTechTracker_SingleInstance_47891", out createdNew);
+            _singleInstanceMutex = new Mutex(true, "Global\\ParakshTechHRMSTracker_SingleInstance_47891", out createdNew);
             if (!createdNew)
             {
                 // Already running in background
@@ -97,40 +99,75 @@ namespace ParakshTechTracker
                 {
                     if (key != null)
                     {
-                        key.SetValue("ParakshTechTracker", "\"" + InstalledExePath + "\"");
+                        key.SetValue("ParakshTechHRMSTracker", "\"" + InstalledExePath + "\"");
+                        // Clean up legacy key if it existed
+                        try { key.DeleteValue("ParakshTechTracker", false); } catch { }
                     }
                 }
             }
             catch
             {
-                // Non-fatal if locked or restricted
+                // Non-fatal if restricted
             }
         }
 
         private static void SetupTrayIcon()
         {
             ContextMenuStrip menu = new ContextMenuStrip();
-            ToolStripMenuItem statusItem = new ToolStripMenuItem("ParakshTech LMS Tracker (Running)") { Enabled = false };
+            ToolStripMenuItem statusItem = new ToolStripMenuItem("ParakshTech HRMS Tracker (Running)") { Enabled = false };
             ToolStripMenuItem openLmsItem = new ToolStripMenuItem("Open LMS Portal", null, (s, e) =>
             {
                 try { Process.Start("https://lms.parakshtech.com"); } catch { }
             });
+            ToolStripSeparator sep = new ToolStripSeparator();
             ToolStripMenuItem exitItem = new ToolStripMenuItem("Exit Tracker", null, (s, e) =>
             {
+                if (IsWithinOfficeHoursIST())
+                {
+                    MessageBox.Show(
+                        "Exit is disabled during office hours (09:30 AM - 06:30 PM IST).\nScreen tracking is required while on duty.",
+                        "ParakshTech HRMS Tracker",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning
+                    );
+                    return;
+                }
                 if (_trayIcon != null) _trayIcon.Visible = false;
                 if (_captureTimer != null) _captureTimer.Dispose();
                 Application.Exit();
             });
 
+            // Dynamically remove or restore Exit Tracker option based on office hours
+            menu.Opening += (s, e) =>
+            {
+                bool isOffice = IsWithinOfficeHoursIST();
+                if (isOffice)
+                {
+                    // Completely remove Exit Tracker during office hours
+                    exitItem.Visible = false;
+                    sep.Visible = false;
+                    statusItem.Text = "ParakshTech HRMS Tracker (Office Hours 09:30 AM - 06:30 PM)";
+                }
+                else
+                {
+                    exitItem.Visible = true;
+                    exitItem.Enabled = true;
+                    sep.Visible = true;
+                    exitItem.Text = "Exit Tracker";
+                    statusItem.Text = "ParakshTech HRMS Tracker (Outside Office Hours)";
+                }
+            };
+
             menu.Items.Add(statusItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(openLmsItem);
+            menu.Items.Add(sep);
             menu.Items.Add(exitItem);
 
             _trayIcon = new NotifyIcon
             {
                 Icon = SystemIcons.Application,
-                Text = "ParakshTech LMS Screenshot Tracker",
+                Text = "ParakshTech HRMS Tracker",
                 ContextMenuStrip = menu,
                 Visible = true
             };
@@ -140,8 +177,23 @@ namespace ParakshTechTracker
         {
             try
             {
-                if (!File.Exists(SessionFilePath)) return;
-                string json = File.ReadAllText(SessionFilePath, Encoding.UTF8);
+                string path = SessionFilePath;
+                // Migrate from legacy session file if present
+                if (!File.Exists(path))
+                {
+                    string oldPath = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "ParakshTechTracker",
+                        "session.json"
+                    );
+                    if (File.Exists(oldPath))
+                    {
+                        try { File.Copy(oldPath, path, true); } catch { }
+                    }
+                }
+
+                if (!File.Exists(path)) return;
+                string json = File.ReadAllText(path, Encoding.UTF8);
                 lock (StateLock)
                 {
                     _token = ExtractJsonString(json, "token");
@@ -211,7 +263,6 @@ namespace ParakshTechTracker
                     string headerPart = headerEnd >= 0 ? request.Substring(0, headerEnd) : request;
                     string body = headerEnd >= 0 ? request.Substring(headerEnd + 4) : "";
 
-                    // Read remaining body if Content-Length specifies more bytes
                     int contentLength = 0;
                     Match clMatch = Regex.Match(headerPart, @"Content-Length:\s*(\d+)", RegexOptions.IgnoreCase);
                     if (clMatch.Success)
@@ -242,6 +293,7 @@ namespace ParakshTechTracker
                         lock (StateLock)
                         {
                             resp = "{"
+                                + "\"name\":\"ParakshTech HRMS Tracker\","
                                 + "\"installed\":true,"
                                 + "\"running\":true,"
                                 + "\"tracking\":" + (_isTracking ? "true" : "false") + ","
@@ -284,12 +336,12 @@ namespace ParakshTechTracker
                         SaveSession();
                         if (_trayIcon != null)
                         {
-                            _trayIcon.Text = "ParakshTech Tracker: Active";
+                            _trayIcon.Text = "ParakshTech HRMS Tracker: Active";
                         }
 
                         if (shouldCaptureNow)
                         {
-                            ThreadPool.QueueUserWorkItem(_ => TryCaptureAndUpload("Desktop Agent started (Office Hours)", true));
+                            ThreadPool.QueueUserWorkItem(_ => TryCaptureAndUpload("ParakshTech HRMS Tracker started (Office Hours)", true));
                         }
 
                         WriteHttpResponse(stream, 200, "{\"success\":true,\"tracking\":true}");
@@ -308,7 +360,7 @@ namespace ParakshTechTracker
                         SaveSession();
                         if (_trayIcon != null)
                         {
-                            _trayIcon.Text = "ParakshTech Tracker: Stopped";
+                            _trayIcon.Text = "ParakshTech HRMS Tracker: Stopped";
                         }
                         WriteHttpResponse(stream, 200, "{\"success\":true,\"tracking\":false}");
                         return;
@@ -361,7 +413,7 @@ namespace ParakshTechTracker
 
                 if (lastCap == DateTime.MinValue || (DateTime.UtcNow - lastCap).TotalMilliseconds >= CAPTURE_INTERVAL_MS)
                 {
-                    TryCaptureAndUpload("Desktop Agent Auto Capture (Every 10 mins)", false);
+                    TryCaptureAndUpload("ParakshTech HRMS Tracker Auto Capture (Every 10 mins)", false);
                 }
             }, null, 15000, 15000);
         }
@@ -597,4 +649,3 @@ namespace ParakshTechTracker
         }
     }
 }
-
