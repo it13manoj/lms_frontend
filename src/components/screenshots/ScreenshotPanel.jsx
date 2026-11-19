@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Container, Row, Col, Card, Button, Form, Badge,
-  Spinner, Alert, Modal, ButtonGroup
+  Spinner, Alert, Modal, ButtonGroup, Table
 } from 'react-bootstrap';
 import {
   FaCamera, FaCheckCircle, FaTimesCircle, FaTrash,
   FaClock, FaFilter, FaSearchPlus, FaSyncAlt, FaCalendarDay,
-  FaCalendarAlt, FaUsers, FaCheckDouble, FaDownload
+  FaCalendarAlt, FaUsers, FaCheckDouble, FaDownload,
+  FaExclamationTriangle, FaList, FaThLarge, FaPowerOff,
+  FaChevronDown, FaChevronUp
 } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
@@ -62,6 +64,8 @@ const ScreenshotPanel = () => {
   const [previewItem, setPreviewItem] = useState(null);
   const [previewNotes, setPreviewNotes] = useState('');
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(null);
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'table'
+  const [showOffIntervals, setShowOffIntervals] = useState(false);
   const [agentStatus, setAgentStatus] = useState({ installed: false, running: false, tracking: false, lastStatus: '' });
   const [checkingAgent, setCheckingAgent] = useState(false);
 
@@ -320,56 +324,155 @@ const ScreenshotPanel = () => {
       )}
 
       {/* Summary KPIs */}
-      <Row className="g-3 mb-4">
-        <Col xs={6} md={3}>
+      <Row className="g-3 mb-3">
+        <Col xs={6} md={4} lg={2}>
           <Card
             className={`border-0 shadow-sm h-100 ${statusFilter === 'all' ? 'border border-primary border-2' : ''}`}
             style={{ cursor: 'pointer' }}
             onClick={() => setStatusFilter('all')}
           >
-            <Card.Body className="py-3">
-              <div className="text-muted small fw-semibold">TOTAL SCREENSHOTS</div>
+            <Card.Body className="py-3 px-2 text-center">
+              <div className="text-muted small fw-semibold">TOTAL CAPTURES</div>
               <h3 className="fw-bold mb-0 text-primary">{summary.total}</h3>
+              <div className="text-muted" style={{ fontSize: '11px' }}>All screenshots</div>
             </Card.Body>
           </Card>
         </Col>
-        <Col xs={6} md={3}>
+
+        <Col xs={6} md={4} lg={2}>
+          <Card className="border-0 shadow-sm h-100 border-start border-4 border-danger">
+            <Card.Body className="py-3 px-2 text-center">
+              <div className="text-danger small fw-semibold d-flex align-items-center justify-content-center gap-1">
+                <FaPowerOff size={11} />
+                <span>SYSTEM OFF TIME</span>
+              </div>
+              <h3 className="fw-bold mb-0 text-danger">{summary.total_off_formatted || '0m'}</h3>
+              <div className="text-danger fw-semibold" style={{ fontSize: '11px' }}>
+                {summary.off_gaps_count || 0} gaps &gt; 12m
+              </div>
+            </Card.Body>
+          </Card>
+        </Col>
+
+        <Col xs={6} md={4} lg={2}>
+          <Card className="border-0 shadow-sm h-100 border-start border-4 border-success">
+            <Card.Body className="py-3 px-2 text-center">
+              <div className="text-success small fw-semibold d-flex align-items-center justify-content-center gap-1">
+                <FaClock size={11} />
+                <span>ON-TIME CAPTURES</span>
+              </div>
+              <h3 className="fw-bold mb-0 text-success">{summary.normal_gaps_count || 0}</h3>
+              <div className="text-muted" style={{ fontSize: '11px' }}>Gap &le; 12 mins</div>
+            </Card.Body>
+          </Card>
+        </Col>
+
+        <Col xs={6} md={4} lg={2}>
           <Card
             className={`border-0 shadow-sm h-100 ${statusFilter === 'pending' ? 'border border-warning border-2' : ''}`}
             style={{ cursor: 'pointer' }}
             onClick={() => setStatusFilter(statusFilter === 'pending' ? 'all' : 'pending')}
           >
-            <Card.Body className="py-3">
-              <div className="text-muted small fw-semibold">PENDING REVIEW</div>
+            <Card.Body className="py-3 px-2 text-center">
+              <div className="text-muted small fw-semibold">PENDING</div>
               <h3 className="fw-bold mb-0 text-warning">{summary.pending}</h3>
+              <div className="text-muted" style={{ fontSize: '11px' }}>Awaiting review</div>
             </Card.Body>
           </Card>
         </Col>
-        <Col xs={6} md={3}>
+
+        <Col xs={6} md={4} lg={2}>
           <Card
             className={`border-0 shadow-sm h-100 ${statusFilter === 'verified' ? 'border border-success border-2' : ''}`}
             style={{ cursor: 'pointer' }}
             onClick={() => setStatusFilter(statusFilter === 'verified' ? 'all' : 'verified')}
           >
-            <Card.Body className="py-3">
+            <Card.Body className="py-3 px-2 text-center">
               <div className="text-muted small fw-semibold">VERIFIED</div>
               <h3 className="fw-bold mb-0 text-success">{summary.verified}</h3>
+              <div className="text-muted" style={{ fontSize: '11px' }}>Approved</div>
             </Card.Body>
           </Card>
         </Col>
-        <Col xs={6} md={3}>
+
+        <Col xs={6} md={4} lg={2}>
           <Card
             className={`border-0 shadow-sm h-100 ${statusFilter === 'rejected' ? 'border border-danger border-2' : ''}`}
             style={{ cursor: 'pointer' }}
             onClick={() => setStatusFilter(statusFilter === 'rejected' ? 'all' : 'rejected')}
           >
-            <Card.Body className="py-3">
+            <Card.Body className="py-3 px-2 text-center">
               <div className="text-muted small fw-semibold">REJECTED</div>
               <h3 className="fw-bold mb-0 text-danger">{summary.rejected}</h3>
+              <div className="text-muted" style={{ fontSize: '11px' }}>Disapproved</div>
             </Card.Body>
           </Card>
         </Col>
       </Row>
+
+      {/* System Off Gaps (> 12m) Detected Alert */}
+      {summary.off_gaps_count > 0 && (
+        <Alert variant="warning" className="border-warning shadow-sm mb-3 py-2">
+          <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+              <strong className="text-danger">
+                <FaExclamationTriangle className="me-1" />
+                System Off Detected ({summary.total_off_formatted}):
+              </strong>{' '}
+              <span className="small text-dark">
+                {summary.off_gaps_count} time gap(s) greater than 12 minutes occurred between screenshots. Total system off time: <strong>{summary.total_off_formatted}</strong>.
+              </span>
+            </div>
+            <Button
+              variant="outline-danger"
+              size="sm"
+              onClick={() => setShowOffIntervals(!showOffIntervals)}
+              className="py-1 px-2 fw-semibold"
+            >
+              {showOffIntervals ? (
+                <>Hide Details <FaChevronUp className="ms-1" size={10} /></>
+              ) : (
+                <>View Off Intervals ({summary.off_gaps_count}) <FaChevronDown className="ms-1" size={10} /></>
+              )}
+            </Button>
+          </div>
+          {showOffIntervals && summary.off_intervals && (
+            <div className="mt-2 pt-2 border-top">
+              <div className="small fw-semibold text-muted mb-1">Breakdown of Screenshot Gaps &gt; 12 Minutes (System Off Log):</div>
+              <div className="table-responsive">
+                <Table size="sm" bordered hover className="bg-white mb-0 small align-middle">
+                  <thead className="table-light">
+                    <tr>
+                      <th style={{ width: '40px' }}>#</th>
+                      <th>Employee</th>
+                      <th>Date</th>
+                      <th>From (Previous Capture)</th>
+                      <th>To (Next Capture)</th>
+                      <th>Time Gap</th>
+                      <th>System Off Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summary.off_intervals.map((gap, idx) => (
+                      <tr key={idx} className="table-warning">
+                        <td>{idx + 1}</td>
+                        <td className="fw-semibold">{gap.employeeName || 'Employee'}</td>
+                        <td>{gap.date}</td>
+                        <td className="font-monospace">{gap.fromTimeFormatted}</td>
+                        <td className="font-monospace">{gap.toTimeFormatted}</td>
+                        <td className="fw-bold text-danger">{gap.gapMinutes} mins</td>
+                        <td>
+                          <Badge bg="danger">+{gap.offMinutes}m Off Time</Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </div>
+            </div>
+          )}
+        </Alert>
+      )}
 
       {/* Filters Bar: Day-wise / Month-wise / User-wise */}
       <Card className="shadow-sm border-0 mb-3">
@@ -471,8 +574,24 @@ const ScreenshotPanel = () => {
               </Form.Select>
             </Col>
 
-            <Col xs={12} md={2} className="d-flex justify-content-md-end gap-2">
-              <Button variant="outline-primary" size="sm" onClick={fetchScreenshots} disabled={loading}>
+            <Col xs={12} md={3} className="d-flex justify-content-md-end align-items-end gap-2 flex-wrap">
+              <ButtonGroup size="sm">
+                <Button
+                  variant={viewMode === 'grid' ? 'primary' : 'outline-secondary'}
+                  onClick={() => setViewMode('grid')}
+                  title="Card Gallery View"
+                >
+                  <FaThLarge className="me-1" /> Grid
+                </Button>
+                <Button
+                  variant={viewMode === 'table' ? 'primary' : 'outline-secondary'}
+                  onClick={() => setViewMode('table')}
+                  title="Gap Analysis & Comparison Table"
+                >
+                  <FaList className="me-1" /> Gap Table
+                </Button>
+              </ButtonGroup>
+              <Button variant="outline-primary" size="sm" onClick={fetchScreenshots} disabled={loading} title="Refresh">
                 <FaSyncAlt className={loading ? 'fa-spin me-1' : 'me-1'} /> Refresh
               </Button>
             </Col>
@@ -564,7 +683,7 @@ const ScreenshotPanel = () => {
         </Card.Body>
       </Card>
 
-      {/* Screenshots Gallery */}
+      {/* Screenshots Gallery / Gap Table */}
       {loading ? (
         <div className="text-center py-5">
           <Spinner animation="border" variant="primary" />
@@ -580,7 +699,132 @@ const ScreenshotPanel = () => {
             </p>
           </Card.Body>
         </Card>
+      ) : viewMode === 'table' ? (
+        /* Gap Analysis & Comparison Table View */
+        <Card className="border-0 shadow-sm">
+          <div className="table-responsive">
+            <Table hover className="align-middle mb-0 text-nowrap">
+              <thead className="table-light">
+                <tr>
+                  {isAdminOrHR && <th style={{ width: '40px' }}></th>}
+                  <th style={{ width: '50px' }}>#</th>
+                  <th>Employee</th>
+                  <th>Date</th>
+                  <th>Capture Time</th>
+                  <th>Previous Capture</th>
+                  <th>Screenshot Gap</th>
+                  <th>System Off Time</th>
+                  <th>Status</th>
+                  <th>Preview</th>
+                  {isAdminOrHR && <th>Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {displayedScreenshots.map((item, index) => {
+                  const isSelected = selectedIds.includes(item.id);
+                  return (
+                    <tr key={item.id} className={item.is_gap_alert ? 'table-warning' : ''}>
+                      {isAdminOrHR && (
+                        <td>
+                          <Form.Check
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSelectId(item.id)}
+                            aria-label={`Select ${item.id}`}
+                          />
+                        </td>
+                      )}
+                      <td className="text-muted font-monospace">{index + 1}</td>
+                      <td>
+                        <div className="fw-semibold text-dark">{item.employee_name || 'Employee'}</div>
+                        {item.job_no && (
+                          <span className="badge bg-light text-primary border font-monospace" style={{ fontSize: '10px' }}>
+                            {item.job_no}
+                          </span>
+                        )}
+                      </td>
+                      <td className="small">{item.date}</td>
+                      <td className="font-monospace fw-bold">{item.capture_time_formatted}</td>
+                      <td className="font-monospace text-muted">
+                        {item.prev_capture_time_formatted || <span className="fst-italic text-secondary">Initial</span>}
+                      </td>
+                      <td>
+                        {item.is_gap_alert ? (
+                          <Badge bg="danger" className="d-inline-flex align-items-center gap-1 py-1 px-2">
+                            <FaExclamationTriangle size={10} />
+                            <span>{item.gap_minutes} mins</span>
+                          </Badge>
+                        ) : item.gap_minutes !== null ? (
+                          <Badge bg="light" text="dark" className="border py-1 px-2 font-monospace">
+                            +{item.gap_minutes}m
+                          </Badge>
+                        ) : (
+                          <Badge bg="info" text="dark" className="py-1 px-2">Initial</Badge>
+                        )}
+                      </td>
+                      <td>
+                        {item.is_gap_alert ? (
+                          <span className="fw-bold text-danger">+{item.gap_off_minutes}m Off</span>
+                        ) : (
+                          <span className="text-muted small">0m (Normal)</span>
+                        )}
+                      </td>
+                      <td>{statusBadge(item.status)}</td>
+                      <td>
+                        <img
+                          src={getScreenshotSrc(item.image_path)}
+                          alt="Thumbnail"
+                          style={{ width: '60px', height: '38px', objectFit: 'cover', borderRadius: '4px', cursor: 'pointer' }}
+                          onClick={() => openPreview(item)}
+                          onError={handleScreenshotImgError}
+                          title="Click to view full resolution"
+                        />
+                      </td>
+                      {isAdminOrHR && (
+                        <td>
+                          <div className="d-flex gap-1">
+                            <Button
+                              variant={item.status === 'verified' ? 'success' : 'outline-success'}
+                              size="sm"
+                              className="py-1 px-2"
+                              disabled={actionLoading}
+                              onClick={() => handleVerifyOne(item.id, 'verified', item.notes)}
+                              title="Verify"
+                            >
+                              <FaCheckCircle size={12} />
+                            </Button>
+                            <Button
+                              variant={item.status === 'rejected' ? 'warning' : 'outline-warning'}
+                              size="sm"
+                              className="py-1 px-2"
+                              disabled={actionLoading}
+                              onClick={() => handleVerifyOne(item.id, 'rejected', item.notes)}
+                              title="Reject"
+                            >
+                              <FaTimesCircle size={12} />
+                            </Button>
+                            <Button
+                              variant="outline-danger"
+                              size="sm"
+                              className="py-1 px-2"
+                              disabled={actionLoading}
+                              onClick={() => handleDeleteOne(item.id)}
+                              title="Delete"
+                            >
+                              <FaTrash size={12} />
+                            </Button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </Table>
+          </div>
+        </Card>
       ) : (
+        /* Card Gallery Grid View */
         <Row className="g-3">
           {displayedScreenshots.map((item) => {
             const isSelected = selectedIds.includes(item.id);
@@ -588,7 +832,7 @@ const ScreenshotPanel = () => {
               <Col key={item.id} xs={12} sm={6} lg={4} xl={3}>
                 <Card
                   className={`h-100 shadow-sm border ${
-                    isSelected ? 'border-primary border-2' : 'border-light-subtle'
+                    isSelected ? 'border-primary border-2' : item.is_gap_alert ? 'border-danger border-2' : 'border-light-subtle'
                   }`}
                 >
                   <div className="position-relative bg-dark" style={{ height: '170px', overflow: 'hidden' }}>
@@ -636,6 +880,26 @@ const ScreenshotPanel = () => {
                           </span>
                         )}
                       </div>
+
+                      {/* Screenshot Gap Comparison Badge */}
+                      <div className="mt-2 mb-1">
+                        {item.is_gap_alert ? (
+                          <Badge bg="danger" className="d-inline-flex align-items-center gap-1 py-1 px-2 text-wrap text-start w-100">
+                            <FaExclamationTriangle size={11} className="flex-shrink-0" />
+                            <span>⚠️ Gap: {item.gap_minutes}m (Off: {item.gap_off_minutes}m)</span>
+                          </Badge>
+                        ) : item.gap_minutes !== null ? (
+                          <Badge bg="light" text="dark" className="border d-inline-flex align-items-center gap-1 font-monospace">
+                            <FaClock size={9} className="text-muted" />
+                            <span>+{item.gap_minutes}m gap</span>
+                          </Badge>
+                        ) : (
+                          <Badge bg="info" text="dark" className="d-inline-flex align-items-center gap-1">
+                            <span>Initial Capture</span>
+                          </Badge>
+                        )}
+                      </div>
+
                       <div className="text-muted small mt-1 d-flex justify-content-between">
                         <span>{item.date}{item.file_size_kb ? ` • ${item.file_size_kb} KB` : ''}</span>
                         <span className="font-monospace fw-semibold">{item.capture_time_formatted}</span>
@@ -689,7 +953,7 @@ const ScreenshotPanel = () => {
       {/* Full-Resolution Preview & Admin Verification Modal */}
       <Modal show={!!previewItem} onHide={() => setPreviewItem(null)} size="xl" centered>
         <Modal.Header closeButton>
-          <Modal.Title className="fs-6 d-flex align-items-center gap-2">
+          <Modal.Title className="fs-6 d-flex align-items-center gap-2 flex-wrap">
             <span>{previewItem?.employee_name}</span>
             {previewItem?.job_no && <Badge bg="secondary">{previewItem.job_no}</Badge>}
             <span className="text-muted fw-normal">
@@ -700,12 +964,41 @@ const ScreenshotPanel = () => {
         </Modal.Header>
         <Modal.Body className="bg-dark text-center p-2">
           {previewItem && (
-            <img
-              src={getScreenshotSrc(previewItem.image_path)}
-              alt="Screenshot preview"
-              style={{ maxWidth: '100%', maxHeight: '72vh', objectFit: 'contain' }}
-              onError={handleScreenshotImgError}
-            />
+            <>
+              {/* Gap Comparison Details Bar */}
+              <div className="bg-light text-dark p-2 mb-2 rounded d-flex flex-wrap justify-content-between align-items-center text-start small">
+                <div>
+                  <strong>Capture Time:</strong> <span className="font-monospace fw-bold">{previewItem.capture_time_formatted}</span>
+                  {previewItem.prev_capture_time_formatted && (
+                    <span className="ms-2 text-muted">
+                      (Previous: <span className="font-monospace">{previewItem.prev_capture_time_formatted}</span>)
+                    </span>
+                  )}
+                </div>
+                <div>
+                  {previewItem.is_gap_alert ? (
+                    <Badge bg="danger" className="py-1 px-2">
+                      <FaExclamationTriangle className="me-1" />
+                      Time Gap: {previewItem.gap_minutes} mins (System Off: {previewItem.gap_off_minutes} mins)
+                    </Badge>
+                  ) : previewItem.gap_minutes !== null ? (
+                    <Badge bg="success" className="py-1 px-2">
+                      ✓ Time Gap: {previewItem.gap_minutes} mins (Normal On-Time)
+                    </Badge>
+                  ) : (
+                    <Badge bg="info" text="dark" className="py-1 px-2">
+                      Initial capture of day
+                    </Badge>
+                  )}
+                </div>
+              </div>
+              <img
+                src={getScreenshotSrc(previewItem.image_path)}
+                alt="Screenshot preview"
+                style={{ maxWidth: '100%', maxHeight: '68vh', objectFit: 'contain' }}
+                onError={handleScreenshotImgError}
+              />
+            </>
           )}
         </Modal.Body>
         {isAdminOrHR && previewItem && (
