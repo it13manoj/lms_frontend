@@ -354,28 +354,31 @@ const EmployeeList = () => {
                             >
                               <FaEdit />
                             </Button>
-                            {employee.User?.status === 'active' ? (
-                              <Button
-                                variant="outline-warning"
-                                size="sm"
-                                onClick={() => {
-                                  setStatusActionTarget(employee);
-                                  setSelectedNewStatus('inactive');
-                                  setShowStatusModal(true);
-                                }}
-                                title="Deactivate or Terminate Employee (Revoke Panel Access)"
-                              >
-                                <FaUserSlash />
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="outline-success"
-                                size="sm"
-                                onClick={() => handleStatusChange(employee.id, 'active')}
-                                title="Reactivate Employee (Restore Panel Access)"
-                              >
-                                <FaUserCheck />
-                              </Button>
+                            {/* Deactivate / Terminate / Reactivate Action - Non-admin accounts only */}
+                            {employee.User?.role !== 'admin' && (
+                              employee.User?.status === 'active' ? (
+                                <Button
+                                  variant="outline-warning"
+                                  size="sm"
+                                  onClick={() => {
+                                    setStatusActionTarget(employee);
+                                    setSelectedNewStatus('inactive');
+                                    setShowStatusModal(true);
+                                  }}
+                                  title="Deactivate or Terminate Employee (Revoke Panel Access)"
+                                >
+                                  <FaUserSlash />
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="outline-success"
+                                  size="sm"
+                                  onClick={() => handleStatusChange(employee.id, 'active')}
+                                  title="Reactivate Employee (Restore Panel Access)"
+                                >
+                                  <FaUserCheck />
+                                </Button>
+                              )
                             )}
                             <Button 
                               variant="outline-danger" 
@@ -607,7 +610,7 @@ const EmployeeList = () => {
                   </Col>
                 </Row>
 
-                {editing && (
+                {editing && selectedEmployee?.User?.role !== 'admin' && (
                   <Row>
                     <Col md={12}>
                       <Form.Group className="mb-3">
