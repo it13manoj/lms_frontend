@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Row, Col, Card, Table, Button, Badge, Modal, Form, 
-  Spinner, Alert, InputGroup, ButtonGroup 
+  Spinner, Alert, InputGroup, ButtonGroup, Dropdown 
 } from 'react-bootstrap';
 import { 
   FaFileAlt, FaPlus, FaPrint, FaSearch, FaFilter, 
@@ -10,8 +10,9 @@ import {
   FaColumns, FaDesktop, FaTimes, FaLock, FaKey,
   FaEyeSlash, FaShieldAlt, FaPen, FaExclamationTriangle,
   FaSave, FaUser, FaBriefcase, FaMapMarkerAlt, FaFileSignature,
-  FaUndo
+  FaUndo, FaFileImage, FaDownload
 } from 'react-icons/fa';
+import html2canvas from 'html2canvas';
 import { toast } from 'react-toastify';
 import letterService from '../../services/letterService';
 import api from '../../services/api';
@@ -95,6 +96,7 @@ export default function LetterList({ defaultType = 'all' }) {
   const [previewModalZoom, setPreviewModalZoom] = useState(0.85);
   const [previewSaving, setPreviewSaving] = useState(false);
   const [previewFormPin, setPreviewFormPin] = useState(false);
+  const [exportingImage, setExportingImage] = useState(false);
 
   // Security PIN Configuration Modal State
   const [isPinConfigured, setIsPinConfigured] = useState(false);
@@ -487,6 +489,82 @@ export default function LetterList({ defaultType = 'all' }) {
       }
     } catch (err) {
       toast.error('Failed to delete letter');
+    }
+  };
+
+  // Secure Image Export Action - Flattens document to unalterable high-res PNG / JPEG
+  const handleExportImage = async (format = 'png') => {
+    const printArea = document.querySelector('.letter-preview-print-area');
+    if (!printArea) {
+      toast.error('Document preview is not available for image export');
+      return;
+    }
+
+    const targetElement = printArea.querySelector('.printable-letter-container') || printArea;
+
+    try {
+      setExportingImage(true);
+      toast.info(`Generating secure ${format.toUpperCase()} image...`);
+
+      // Temporarily normalize zoom scaling to capture native full A4 dimensions
+      const zoomViewport = document.querySelector('.letter-zoom-viewport');
+      const prevTransform = zoomViewport ? zoomViewport.style.transform : '';
+      const prevMargin = zoomViewport ? zoomViewport.style.marginBottom : '';
+      if (zoomViewport) {
+        zoomViewport.style.transform = 'none';
+        zoomViewport.style.marginBottom = '0px';
+      }
+
+      // Pre-load all document images (logo, signature, stamps)
+      const images = targetElement.querySelectorAll('img');
+      await Promise.all(
+        Array.from(images).map(img => {
+          if (img.complete) return Promise.resolve();
+          return new Promise(resolve => {
+            img.onload = resolve;
+            img.onerror = resolve;
+          });
+        })
+      );
+
+      // Render ultra-crisp canvas
+      const canvas = await html2canvas(targetElement, {
+        scale: 2.5, // 2.5x retina rendering ensures sharp text and stamps
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        imageTimeout: 15000
+      });
+
+      // Restore zoom container styles
+      if (zoomViewport) {
+        zoomViewport.style.transform = prevTransform;
+        zoomViewport.style.marginBottom = prevMargin;
+      }
+
+      const rawName = previewFormData?.candidate_name || previewLetter?.candidate_name || 'Candidate';
+      const cleanName = rawName.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const docType = (previewLetter?.letter_type || 'Letter').toUpperCase();
+      const refNo = (previewLetter?.reference_no || 'Document').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const fileName = `${docType}_${cleanName}_${refNo}.${format === 'jpeg' ? 'jpg' : 'png'}`;
+
+      const mimeType = format === 'jpeg' || format === 'jpg' ? 'image/jpeg' : 'image/png';
+      const dataUrl = canvas.toDataURL(mimeType, 0.95);
+
+      const downloadLink = document.createElement('a');
+      downloadLink.download = fileName;
+      downloadLink.href = dataUrl;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+
+      toast.success(`Exported secure ${format.toUpperCase()} image successfully!`);
+    } catch (err) {
+      console.error('Export image error:', err);
+      toast.error('Failed to export document image: ' + err.message);
+    } finally {
+      setExportingImage(false);
     }
   };
 
@@ -925,6 +1003,18 @@ export default function LetterList({ defaultType = 'all' }) {
                             >
                               <FaEye size={12} />
                               <span>View &amp; Edit</span>
+                            </Button>
+
+                            {/* Quick Export Image / PDF */}
+                            <Button 
+                              variant="outline-success" 
+                              size="sm" 
+                              title="Quick View & Export (Secure Image / PDF)"
+                              className="p-1 px-2 d-flex align-items-center gap-1"
+                              onClick={() => handleOpenPreview(letter, 'preview')}
+                            >
+                              <FaFileImage size={12} />
+                              <span className="d-none d-lg-inline">Export</span>
                             </Button>
                             
                             <Button 
@@ -1682,11 +1772,45 @@ export default function LetterList({ defaultType = 'all' }) {
               </div>
             )}
 
+            {/* Dual Export Options: High-Security Image (PNG/JPG) & PDF */}
             <Button 
-              variant="success" 
+              variant="primary" 
+              size="sm" 
+              onClick={() => handleExportImage('png')} 
+              disabled={exportingImage}
+              className="d-flex align-items-center gap-1 shadow-sm px-3 fw-semibold"
+              title="Export unalterable high-resolution image for maximum security"
+            >
+              {exportingImage ? (
+                <>
+                  <Spinner size="sm" animation="border" className="me-1" />
+                  <span>Exporting...</span>
+                </>
+              ) : (
+                <>
+                  <FaFileImage size={13} />
+                  <span>Export Image (PNG)</span>
+                </>
+              )}
+            </Button>
+
+            <Button 
+              variant="outline-primary" 
+              size="sm" 
+              onClick={() => handleExportImage('jpeg')} 
+              disabled={exportingImage}
+              className="d-flex align-items-center gap-1 shadow-sm px-2"
+              title="Export as JPG image"
+            >
+              <span>JPG</span>
+            </Button>
+
+            <Button 
+              variant="outline-success" 
               size="sm" 
               onClick={handlePrintLetter} 
               className="d-flex align-items-center gap-1 shadow-sm px-3"
+              title="Print document or save as vector PDF"
             >
               <FaPrint size={13} />
               <span>Print / Save PDF</span>
@@ -2125,11 +2249,45 @@ export default function LetterList({ defaultType = 'all' }) {
               <FaTimes size={13} />
               <span>Close</span>
             </Button>
+            {/* Dual Export Options: High-Security Image (PNG/JPG) & PDF */}
             <Button 
-              variant="success" 
+              variant="primary" 
+              size="sm" 
+              onClick={() => handleExportImage('png')} 
+              disabled={exportingImage}
+              className="d-flex align-items-center gap-1 shadow-sm px-3 fw-semibold"
+              title="Export unalterable high-resolution image for maximum security"
+            >
+              {exportingImage ? (
+                <>
+                  <Spinner size="sm" animation="border" className="me-1" />
+                  <span>Exporting...</span>
+                </>
+              ) : (
+                <>
+                  <FaFileImage size={13} />
+                  <span>Export Image (PNG)</span>
+                </>
+              )}
+            </Button>
+
+            <Button 
+              variant="outline-primary" 
+              size="sm" 
+              onClick={() => handleExportImage('jpeg')} 
+              disabled={exportingImage}
+              className="d-flex align-items-center gap-1 shadow-sm px-2"
+              title="Export as JPG image"
+            >
+              <span>JPG</span>
+            </Button>
+
+            <Button 
+              variant="outline-success" 
               size="sm" 
               onClick={handlePrintLetter} 
               className="d-flex align-items-center gap-1 shadow-sm px-3"
+              title="Print document or save as vector PDF"
             >
               <FaPrint size={13} />
               <span>Print / Save PDF</span>

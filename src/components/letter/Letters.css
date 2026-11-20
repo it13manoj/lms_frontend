@@ -46,6 +46,13 @@
   border: 1px solid #e9d5ff;
 }
 
+.letter-type-badge-training {
+  background-color: #d1fae5;
+  color: #065f46;
+  font-weight: 600;
+  border: 1px solid #a7f3d0;
+}
+
 .letter-security-badge-signed {
   background-color: #dcfce7;
   color: #166534;
