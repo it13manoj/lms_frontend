@@ -9,7 +9,7 @@ import {
   FaPrint, FaFilePdf, FaMoneyBillWave,
   FaCalendarAlt, FaUser, FaCreditCard,
   FaCheckCircle, FaTimesCircle, FaClock,
-  FaSync
+  FaSync, FaPlus
 } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
@@ -42,12 +42,41 @@ const PaymentHistory = () => {
     completedCount: 0
   });
 
+  const [employees, setEmployees] = useState([]);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [submittingPayment, setSubmittingPayment] = useState(false);
+  const [addFormData, setAddFormData] = useState({
+    employee_id: '',
+    payment_type: 'salary',
+    amount: '',
+    payment_date: new Date().toISOString().split('T')[0],
+    payment_method: 'Bank Transfer',
+    status: 'completed',
+    description: ''
+  });
+
   const isAdminOrHR = user?.role === 'admin' || user?.role === 'hr';
 
   useEffect(() => {
     fetchPayments();
     fetchSummary();
+    if (isAdminOrHR) {
+      fetchEmployees();
+    }
   }, [filters, pagination.page]);
+
+  const fetchEmployees = async () => {
+    try {
+      const res = await api.get('/employees?limit=100');
+      const list = res.data?.data || [];
+      setEmployees(list);
+      if (list.length > 0 && !addFormData.employee_id) {
+        setAddFormData(prev => ({ ...prev, employee_id: String(list[0].id) }));
+      }
+    } catch (e) {
+      console.error('Failed to load employees for payment dropdown', e);
+    }
+  };
 
   const fetchPayments = async () => {
     try {
@@ -149,15 +178,16 @@ const PaymentHistory = () => {
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-IN', {
       style: 'currency',
-      currency: 'USD'
-    }).format(amount);
+      currency: 'INR',
+      maximumFractionDigits: 2
+    }).format(amount || 0);
   };
 
   const formatDate = (date) => {
     if (!date) return 'N/A';
-    return new Date(date).toLocaleDateString('en-US', {
+    return new Date(date).toLocaleDateString('en-GB', {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
@@ -172,17 +202,50 @@ const PaymentHistory = () => {
   const handleDownloadReceipt = async (paymentId) => {
     try {
       const response = await api.get(`/payments/${paymentId}/receipt`, {
-        responseType: 'blob'
+        responseType: 'text'
       });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `receipt-${paymentId}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      const receiptWindow = window.open('', '_blank');
+      if (receiptWindow) {
+        receiptWindow.document.write(response.data);
+        receiptWindow.document.close();
+      } else {
+        alert('Please allow popups to view/print receipt.');
+      }
     } catch (error) {
-      alert('Failed to download receipt');
+      alert('Failed to download receipt: ' + (error.response?.data?.message || error.message));
+    }
+  };
+
+  const handleCreatePaymentSubmit = async (e) => {
+    e.preventDefault();
+    if (!addFormData.employee_id) {
+      alert('Please select an employee');
+      return;
+    }
+    if (!addFormData.amount || Number(addFormData.amount) <= 0) {
+      alert('Please enter a valid amount');
+      return;
+    }
+
+    try {
+      setSubmittingPayment(true);
+      await api.post('/payments', addFormData);
+      setShowAddModal(false);
+      setAddFormData({
+        employee_id: employees.length > 0 ? String(employees[0].id) : '',
+        payment_type: 'salary',
+        amount: '',
+        payment_date: new Date().toISOString().split('T')[0],
+        payment_method: 'Bank Transfer',
+        status: 'completed',
+        description: ''
+      });
+      fetchPayments();
+      fetchSummary();
+    } catch (err) {
+      alert('Failed to record payment: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setSubmittingPayment(false);
     }
   };
 
@@ -202,11 +265,17 @@ const PaymentHistory = () => {
           <p className="text-muted">View and manage all payment transactions</p>
         </div>
         <div className="d-flex gap-2">
-          <Button variant="outline-secondary" onClick={fetchPayments}>
+          {isAdminOrHR && (
+            <Button variant="primary" onClick={() => setShowAddModal(true)}>
+              <FaPlus className="me-2" />
+              Record Payment
+            </Button>
+          )}
+          <Button variant="outline-secondary" onClick={() => { fetchPayments(); fetchSummary(); }}>
             <FaSync className="me-2" />
             Refresh
           </Button>
-          <Button variant="outline-primary">
+          <Button variant="outline-primary" onClick={() => window.print()}>
             <FaFilePdf className="me-2" />
             Export Report
           </Button>
@@ -576,6 +645,136 @@ const PaymentHistory = () => {
             </Button>
           )}
         </Modal.Footer>
+      </Modal>
+      {/* Record / Disburse Payment Modal */}
+      <Modal show={showAddModal} onHide={() => setShowAddModal(false)} size="lg">
+        <Form onSubmit={handleCreatePaymentSubmit}>
+          <Modal.Header closeButton>
+            <Modal.Title>
+              <FaMoneyBillWave className="me-2 text-primary" />
+              Record New Payment / Disbursement
+            </Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <Row>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label className="fw-semibold">Beneficiary Employee *</Form.Label>
+                  <Form.Select
+                    value={addFormData.employee_id}
+                    onChange={(e) => setAddFormData({ ...addFormData, employee_id: e.target.value })}
+                    required
+                  >
+                    <option value="">-- Choose Employee --</option>
+                    {employees.map(emp => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.first_name} {emp.last_name} ({emp.employee_id} - {emp.department || 'General'})
+                      </option>
+                    ))}
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label className="fw-semibold">Payment Type *</Form.Label>
+                  <Form.Select
+                    value={addFormData.payment_type}
+                    onChange={(e) => setAddFormData({ ...addFormData, payment_type: e.target.value })}
+                  >
+                    <option value="salary">Salary Disbursement</option>
+                    <option value="bonus">Performance / Festival Bonus</option>
+                    <option value="reimbursement">Expense Reimbursement</option>
+                    <option value="advance">Salary Advance</option>
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+            </Row>
+
+            <Row>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label className="fw-semibold">Amount (₹ INR) *</Form.Label>
+                  <Form.Control
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    placeholder="e.g. 45000"
+                    value={addFormData.amount}
+                    onChange={(e) => setAddFormData({ ...addFormData, amount: e.target.value })}
+                    required
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label className="fw-semibold">Payment Date *</Form.Label>
+                  <Form.Control
+                    type="date"
+                    value={addFormData.payment_date}
+                    onChange={(e) => setAddFormData({ ...addFormData, payment_date: e.target.value })}
+                    required
+                  />
+                </Form.Group>
+              </Col>
+            </Row>
+
+            <Row>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label className="fw-semibold">Payment Method *</Form.Label>
+                  <Form.Select
+                    value={addFormData.payment_method}
+                    onChange={(e) => setAddFormData({ ...addFormData, payment_method: e.target.value })}
+                  >
+                    <option value="Bank Transfer">Bank Transfer (NEFT / IMPS / RTGS)</option>
+                    <option value="UPI / Online">UPI / Corporate Online Banking</option>
+                    <option value="Cheque">Corporate Cheque</option>
+                    <option value="Cash">Cash Voucher</option>
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label className="fw-semibold">Status *</Form.Label>
+                  <Form.Select
+                    value={addFormData.status}
+                    onChange={(e) => setAddFormData({ ...addFormData, status: e.target.value })}
+                  >
+                    <option value="completed">Completed / Settled</option>
+                    <option value="pending">Pending Processing</option>
+                    <option value="failed">Failed / Cancelled</option>
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+            </Row>
+
+            <Form.Group className="mb-3">
+              <Form.Label className="fw-semibold">Payment Description / Notes</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={2}
+                placeholder="Disbursement details, purpose, transaction remarks..."
+                value={addFormData.description}
+                onChange={(e) => setAddFormData({ ...addFormData, description: e.target.value })}
+              />
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowAddModal(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" disabled={submittingPayment}>
+              {submittingPayment ? (
+                <>
+                  <Spinner size="sm" className="me-2" />
+                  Recording...
+                </>
+              ) : (
+                'Confirm & Record Payment'
+              )}
+            </Button>
+          </Modal.Footer>
+        </Form>
       </Modal>
     </div>
   );
