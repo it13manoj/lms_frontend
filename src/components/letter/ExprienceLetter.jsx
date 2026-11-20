@@ -294,6 +294,7 @@ const styles = {
     width: '56px',
     height: '56px',
     objectFit: 'contain',
+    marginRight: '14px'
   },
   brandText: {
     textAlign: 'left',

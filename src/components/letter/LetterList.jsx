@@ -527,6 +527,15 @@ export default function LetterList({ defaultType = 'all' }) {
         })
       );
 
+      // Ensure fonts and glyphs are completely loaded in the browser
+      if (document.fonts && document.fonts.ready) {
+        try {
+          await document.fonts.ready;
+        } catch (e) {
+          // font readiness fallback
+        }
+      }
+
       // Render ultra-crisp canvas
       const canvas = await html2canvas(targetElement, {
         scale: 2.5, // 2.5x retina rendering ensures sharp text and stamps
@@ -534,6 +543,8 @@ export default function LetterList({ defaultType = 'all' }) {
         allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
+        scrollX: 0,
+        scrollY: 0,
         imageTimeout: 15000
       });
 

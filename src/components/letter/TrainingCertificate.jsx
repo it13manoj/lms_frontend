@@ -126,11 +126,19 @@ export default function TrainingCertificate({ data = {} }) {
           <div style={styles.footer}>
             <div style={styles.leftCol}>
               <div style={styles.verificationBadge}>
-                <div style={styles.badgeIcon}>★</div>
-                <div>
-                  <div style={styles.badgeTitle}>Verified Industrial Training</div>
-                  <div style={styles.badgeSubtitle}>ParakshTech LLP HR &amp; Academics</div>
-                </div>
+                <table style={styles.badgeTable}>
+                  <tbody>
+                    <tr>
+                      <td style={styles.badgeIconCell}>
+                        <span style={styles.badgeIcon}>★</span>
+                      </td>
+                      <td style={styles.badgeTextCell}>
+                        <div style={styles.badgeTitle}>Verified Industrial Training</div>
+                        <div style={styles.badgeSubtitle}>ParakshTech LLP HR &amp; Academics</div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
               <div style={styles.verificationNote}>
                 Authenticity may be confirmed via LMS Portal. Ref: {referenceNo}
@@ -232,7 +240,8 @@ const styles = {
   logo: {
     width: '68px',
     height: '68px',
-    objectFit: 'contain'
+    objectFit: 'contain',
+    marginRight: '16px'
   },
   brandText: {
     textAlign: 'left'
@@ -336,24 +345,26 @@ const styles = {
     marginBottom: '14px'
   },
   courseBadge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '8px',
+    display: 'inline-block',
     background: '#edf2f7',
     border: '1px solid #cbd5e1',
     borderRadius: '40px',
-    padding: '6px 22px'
+    padding: '6px 22px',
+    textAlign: 'center'
   },
   courseLabel: {
     fontSize: '12px',
     color: '#4a5568',
-    fontWeight: '600'
+    fontWeight: '600',
+    marginRight: '8px',
+    display: 'inline-block'
   },
   courseName: {
     fontSize: '15px',
     fontWeight: '800',
     color: '#1a365d',
-    letterSpacing: '0.5px'
+    letterSpacing: '0.5px',
+    display: 'inline-block'
   },
 
   durationParagraph: {
@@ -391,26 +402,48 @@ const styles = {
     textAlign: 'left'
   },
   verificationBadge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '8px',
+    display: 'inline-block',
     padding: '6px 12px',
     background: '#ebf8ff',
     border: '1px solid #bee3f8',
     borderRadius: '6px'
   },
+  badgeTable: {
+    borderCollapse: 'collapse',
+    border: 'none',
+    background: 'transparent',
+    margin: 0,
+    padding: 0
+  },
+  badgeIconCell: {
+    verticalAlign: 'middle',
+    paddingRight: '8px',
+    border: 'none',
+    lineHeight: 1
+  },
+  badgeTextCell: {
+    verticalAlign: 'middle',
+    textAlign: 'left',
+    border: 'none',
+    lineHeight: 1.2
+  },
   badgeIcon: {
     fontSize: '18px',
-    color: '#2b6cb0'
+    color: '#2b6cb0',
+    display: 'inline-block',
+    lineHeight: 1
   },
   badgeTitle: {
     fontSize: '11px',
     fontWeight: '700',
-    color: '#2b6cb0'
+    color: '#2b6cb0',
+    lineHeight: 1.2
   },
   badgeSubtitle: {
     fontSize: '9.5px',
-    color: '#4a5568'
+    color: '#4a5568',
+    lineHeight: 1.2,
+    marginTop: '2px'
   },
   verificationNote: {
     fontSize: '9px',
