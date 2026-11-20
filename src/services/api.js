@@ -35,7 +35,9 @@ api.interceptors.response.use(
       // Server responded with error status
       if (error.response.status === 401) {
         localStorage.removeItem('token');
+        localStorage.removeItem('user');
         delete api.defaults.headers.common['Authorization'];
+        const isRevoked = Boolean(error.response.data?.account_revoked);
         // Only redirect to login if not already on login or guest/meeting pages
         const currentPath = window.location.pathname;
         const isMeetingOrGuest = currentPath.includes('/login') || 
@@ -43,7 +45,7 @@ api.interceptors.response.use(
                                  currentPath.startsWith('/meeting') || 
                                  currentPath.startsWith('/meet');
         if (!isMeetingOrGuest) {
-          window.location.href = '/login';
+          window.location.href = isRevoked ? '/login?revoked=true' : '/login';
         }
       }
     } else if (error.request) {

@@ -7,7 +7,7 @@ import {
   FaPlus, FaEdit, FaTrash, FaEye, FaSearch, 
   FaUser, FaEnvelope, FaPhone, FaBuilding,
   FaBriefcase, FaCalendar, FaMoneyBillWave,
-  FaSave, FaTimes, FaUserPlus
+  FaSave, FaTimes, FaUserPlus, FaUserSlash, FaUserCheck
 } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
 import { Formik, Form as FormikForm, Field, ErrorMessage } from 'formik';
@@ -28,6 +28,9 @@ const EmployeeList = () => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [editing, setEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [statusActionTarget, setStatusActionTarget] = useState(null);
+  const [selectedNewStatus, setSelectedNewStatus] = useState('inactive');
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
@@ -122,6 +125,16 @@ const EmployeeList = () => {
       setError(error.response?.data?.message || 'Failed to save employee');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleStatusChange = async (employeeId, newStatus) => {
+    try {
+      await api.patch(`/employees/${employeeId}/status`, { status: newStatus });
+      fetchEmployees();
+      alert(`Employee status updated to ${newStatus}. Panel access ${newStatus === 'active' ? 'restored' : 'immediately revoked'}.`);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to update employee status');
     }
   };
 
@@ -306,8 +319,17 @@ const EmployeeList = () => {
                       </Badge>
                     </td>
                     <td>
-                      <Badge bg={employee.User?.status === 'active' ? 'success' : 'danger'}>
-                        {employee.User?.status || 'inactive'}
+                      <Badge 
+                        bg={
+                          employee.User?.status === 'active' 
+                            ? 'success' 
+                            : (employee.User?.status === 'terminated' ? 'danger' : 'warning')
+                        }
+                        text={employee.User?.status === 'inactive' ? 'dark' : undefined}
+                      >
+                        {employee.User?.status === 'active' 
+                          ? 'Active' 
+                          : (employee.User?.status === 'terminated' ? 'Terminated' : 'Inactive')}
                       </Badge>
                     </td>
                     <td>
@@ -332,6 +354,29 @@ const EmployeeList = () => {
                             >
                               <FaEdit />
                             </Button>
+                            {employee.User?.status === 'active' ? (
+                              <Button
+                                variant="outline-warning"
+                                size="sm"
+                                onClick={() => {
+                                  setStatusActionTarget(employee);
+                                  setSelectedNewStatus('inactive');
+                                  setShowStatusModal(true);
+                                }}
+                                title="Deactivate or Terminate Employee (Revoke Panel Access)"
+                              >
+                                <FaUserSlash />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline-success"
+                                size="sm"
+                                onClick={() => handleStatusChange(employee.id, 'active')}
+                                title="Reactivate Employee (Restore Panel Access)"
+                              >
+                                <FaUserCheck />
+                              </Button>
+                            )}
                             <Button 
                               variant="outline-danger" 
                               size="sm"
@@ -417,6 +462,7 @@ const EmployeeList = () => {
               position: selectedEmployee?.position || '',
               joining_date: selectedEmployee?.joining_date || '',
               salary: selectedEmployee?.salary || '',
+              status: selectedEmployee?.User?.status || 'active',
               password: ''
             }}
             validationSchema={validationSchema}
@@ -561,6 +607,24 @@ const EmployeeList = () => {
                   </Col>
                 </Row>
 
+                {editing && (
+                  <Row>
+                    <Col md={12}>
+                      <Form.Group className="mb-3">
+                        <Form.Label className="fw-semibold">Account Access &amp; Status *</Form.Label>
+                        <Field as="select" name="status" className="form-select">
+                          <option value="active">Active (Full Access Granted to LMS Panel &amp; Desktop Tracker)</option>
+                          <option value="inactive">Inactive (Access Suspended - Panel &amp; Tracker Immediately Revoked)</option>
+                          <option value="terminated">Terminated (Employee Terminated - All Access Permanently Blocked)</option>
+                        </Field>
+                        <Form.Text className="text-muted">
+                          If set to Inactive or Terminated, the employee will be instantly locked out of all LMS panels and APIs.
+                        </Form.Text>
+                      </Form.Group>
+                    </Col>
+                  </Row>
+                )}
+
                 <div className="d-flex justify-content-end gap-2 mt-3">
                   <Button variant="secondary" onClick={() => setShowModal(false)}>
                     <FaTimes className="me-2" />
@@ -635,6 +699,51 @@ const EmployeeList = () => {
         </Button>
     </Modal.Footer>
 </Modal>
+
+      {/* Deactivate / Terminate Access Modal */}
+      <Modal show={showStatusModal} onHide={() => setShowStatusModal(false)}>
+        <Modal.Header closeButton className="bg-light">
+          <Modal.Title className="fs-6 fw-bold text-danger d-flex align-items-center gap-2">
+            <FaUserSlash />
+            <span>Manage Employee Access &amp; Termination</span>
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p className="mb-2">
+            Employee: <strong>{statusActionTarget?.first_name} {statusActionTarget?.last_name}</strong> ({statusActionTarget?.email})
+          </p>
+          <Alert variant="danger" className="py-2 small">
+            <strong>Immediate Access Revocation:</strong> Marking this employee as Inactive or Terminated will <strong>immediately revoke all panel, attendance, and desktop tracking access</strong>. Their session will be terminated instantly and they cannot access the system without administrator approval.
+          </Alert>
+          <Form.Group className="mt-3">
+            <Form.Label className="fw-semibold small">Select Desired Status:</Form.Label>
+            <Form.Select 
+              value={selectedNewStatus} 
+              onChange={(e) => setSelectedNewStatus(e.target.value)}
+            >
+              <option value="inactive">Inactive (Temporary Suspension - Access Immediately Revoked)</option>
+              <option value="terminated">Terminated (Employee Terminated - All Access Permanently Blocked)</option>
+            </Form.Select>
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" size="sm" onClick={() => setShowStatusModal(false)}>
+            Cancel
+          </Button>
+          <Button 
+            variant="danger" 
+            size="sm"
+            onClick={async () => {
+              if (statusActionTarget) {
+                await handleStatusChange(statusActionTarget.id, selectedNewStatus);
+                setShowStatusModal(false);
+              }
+            }}
+          >
+            Apply &amp; Revoke Access Immediately
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 };

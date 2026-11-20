@@ -18,9 +18,14 @@ import api from '../../services/api';
 import OfferLetter from './OfferLetter';
 import JoiningLetter from './JoiningLetter';
 import ExperienceCertificate from './ExprienceLetter';
+import TrainingCertificate from './TrainingCertificate';
 import './Letters.css';
 
 export const DEFAULT_BODY_TEMPLATES = {
+  training: `During the course of the industrial training, they were actively engaged in real-world application architectures, practical project implementations, and modern software development workflows.
+
+They exhibited commendable diligence, sharp problem-solving acumen, disciplined work habits, and completed all project milestone evaluations with high merit.`,
+
   experience: `During the tenure with the organization, they were responsible for designing, developing, and executing key software components, maintaining high technical standards, and collaborating proactively with cross-functional teams to deliver superior digital solutions.
 
 They demonstrated exceptional professionalism, dedication, technical prowess, and a collaborative team attitude throughout their employment with the organization.`,
@@ -68,7 +73,7 @@ export default function LetterList({ defaultType = 'all' }) {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState(defaultType);
-  const [stats, setStats] = useState({ total: 0, offer: 0, joining: 0, experience: 0 });
+  const [stats, setStats] = useState({ total: 0, offer: 0, joining: 0, experience: 0, training: 0 });
 
   // Registered employees list for quick dropdown selection
   const [employeeOptions, setEmployeeOptions] = useState([]);
@@ -607,6 +612,8 @@ export default function LetterList({ defaultType = 'all' }) {
   const renderLetterTemplate = (letter) => {
     if (!letter) return null;
     switch (letter.letter_type) {
+      case 'training':
+        return <TrainingCertificate data={letter} />;
       case 'joining':
         return <JoiningLetter data={letter} />;
       case 'experience':
@@ -658,8 +665,8 @@ export default function LetterList({ defaultType = 'all' }) {
 
       {/* Summary Statistics Cards */}
       <Row className="g-3 mb-4 no-print">
-        <Col xs={12} sm={6} md={3}>
-          <Card className="letters-stat-card bg-white p-3">
+        <Col xs={6} sm={4} md>
+          <Card className="letters-stat-card bg-white p-3 h-100">
             <div className="d-flex justify-content-between align-items-center">
               <div>
                 <span className="text-muted small d-block">Total Generated</span>
@@ -672,8 +679,8 @@ export default function LetterList({ defaultType = 'all' }) {
           </Card>
         </Col>
 
-        <Col xs={12} sm={6} md={3}>
-          <Card className="letters-stat-card bg-white p-3">
+        <Col xs={6} sm={4} md>
+          <Card className="letters-stat-card bg-white p-3 h-100">
             <div className="d-flex justify-content-between align-items-center">
               <div>
                 <span className="text-muted small d-block">Offer Letters</span>
@@ -686,8 +693,8 @@ export default function LetterList({ defaultType = 'all' }) {
           </Card>
         </Col>
 
-        <Col xs={12} sm={6} md={3}>
-          <Card className="letters-stat-card bg-white p-3">
+        <Col xs={6} sm={4} md>
+          <Card className="letters-stat-card bg-white p-3 h-100">
             <div className="d-flex justify-content-between align-items-center">
               <div>
                 <span className="text-muted small d-block">Joining Letters</span>
@@ -700,8 +707,8 @@ export default function LetterList({ defaultType = 'all' }) {
           </Card>
         </Col>
 
-        <Col xs={12} sm={6} md={3}>
-          <Card className="letters-stat-card bg-white p-3">
+        <Col xs={6} sm={4} md>
+          <Card className="letters-stat-card bg-white p-3 h-100">
             <div className="d-flex justify-content-between align-items-center">
               <div>
                 <span className="text-muted small d-block">Experience Letters</span>
@@ -709,6 +716,20 @@ export default function LetterList({ defaultType = 'all' }) {
               </div>
               <div className="p-3 bg-opacity-10 rounded-circle" style={{ background: '#f3e8ff', color: '#6b21a8' }}>
                 <FaUserTie size={20} />
+              </div>
+            </div>
+          </Card>
+        </Col>
+
+        <Col xs={12} sm={4} md>
+          <Card className="letters-stat-card bg-white p-3 h-100">
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <span className="text-muted small d-block">Training Certificates</span>
+                <h4 className="fw-bold mb-0 text-success">{stats.training || 0}</h4>
+              </div>
+              <div className="p-3 bg-success bg-opacity-10 rounded-circle text-success">
+                <FaCheckCircle size={20} />
               </div>
             </div>
           </Card>
@@ -747,6 +768,13 @@ export default function LetterList({ defaultType = 'all' }) {
                 onClick={() => setSelectedTypeFilter('experience')}
               >
                 Experience Certificates
+              </Button>
+              <Button 
+                variant={selectedTypeFilter === 'training' ? 'success' : 'outline-secondary'} 
+                size="sm"
+                onClick={() => setSelectedTypeFilter('training')}
+              >
+                Training Certificates
               </Button>
             </div>
 
@@ -823,13 +851,21 @@ export default function LetterList({ defaultType = 'all' }) {
                         </td>
                         <td>
                           <span className={`badge px-2 py-1 rounded-pill ${
-                            letter.letter_type === 'joining' 
-                              ? 'letter-type-badge-joining' 
-                              : (letter.letter_type === 'experience' 
-                                ? 'letter-type-badge-experience' 
-                                : 'letter-type-badge-offer')
+                            letter.letter_type === 'training'
+                              ? 'bg-success text-white'
+                              : (letter.letter_type === 'joining' 
+                                ? 'letter-type-badge-joining' 
+                                : (letter.letter_type === 'experience' 
+                                  ? 'letter-type-badge-experience' 
+                                  : 'letter-type-badge-offer'))
                           }`}>
-                            {letter.letter_type === 'joining' ? 'Joining Letter' : (letter.letter_type === 'experience' ? 'Experience Certificate' : 'Offer Letter')}
+                            {letter.letter_type === 'training'
+                              ? 'Training Certificate'
+                              : (letter.letter_type === 'joining' 
+                                ? 'Joining Letter' 
+                                : (letter.letter_type === 'experience' 
+                                  ? 'Experience Certificate' 
+                                  : 'Offer Letter'))}
                           </span>
                         </td>
                         <td>
@@ -1044,6 +1080,22 @@ export default function LetterList({ defaultType = 'all' }) {
                             });
                           }}
                         />
+                        <Form.Check 
+                          type="radio"
+                          id="type-training"
+                          label="Training Certificate"
+                          name="letter_type"
+                          checked={formData.letter_type === 'training'}
+                          onChange={() => {
+                            setFormData({ 
+                              ...formData, 
+                              letter_type: 'training',
+                              position: formData.position || 'Full Stack Web Development',
+                              department: formData.department || 'Technology & Engineering',
+                              body_content: DEFAULT_BODY_TEMPLATES.training
+                            });
+                          }}
+                        />
                       </div>
 
                       <Form.Label className="small fw-semibold text-muted">
@@ -1194,10 +1246,10 @@ export default function LetterList({ defaultType = 'all' }) {
                             />
                           </Form.Group>
                         </Col>
-                        {formData.letter_type === 'experience' ? (
+                        {formData.letter_type === 'experience' || formData.letter_type === 'training' ? (
                           <Col md={6}>
                             <Form.Group>
-                              <Form.Label className="small fw-semibold">Relieving / End Date *</Form.Label>
+                              <Form.Label className="small fw-semibold">{formData.letter_type === 'training' ? 'Completion / End Date *' : 'Relieving / End Date *'}</Form.Label>
                               <Form.Control 
                                 size="sm"
                                 type="date" 
@@ -1509,17 +1561,19 @@ export default function LetterList({ defaultType = 'all' }) {
               <span className="text-primary">{previewLetter?.reference_no}</span>
               <Badge 
                 bg={
+                  previewLetter?.letter_type === 'training' ? 'success' :
                   previewLetter?.letter_type === 'joining' ? 'primary' :
                   previewLetter?.letter_type === 'experience' ? 'warning' : 'danger'
                 } 
                 className="fw-semibold text-uppercase text-dark"
                 style={{
                   backgroundColor: previewLetter?.letter_type === 'experience' ? '#f3e8ff' : undefined,
-                  color: previewLetter?.letter_type === 'experience' ? '#6b21a8' : undefined,
+                  color: previewLetter?.letter_type === 'experience' ? '#6b21a8' : (previewLetter?.letter_type === 'training' ? '#ffffff' : undefined),
                   border: previewLetter?.letter_type === 'experience' ? '1px solid #e9d5ff' : undefined
                 }}
               >
-                {previewLetter?.letter_type === 'experience' ? 'Experience Certificate' :
+                {previewLetter?.letter_type === 'training' ? 'Training Certificate' :
+                 previewLetter?.letter_type === 'experience' ? 'Experience Certificate' :
                  previewLetter?.letter_type === 'joining' ? 'Joining Letter' : 'Offer Letter'}
               </Badge>
             </Modal.Title>
@@ -1809,10 +1863,10 @@ export default function LetterList({ defaultType = 'all' }) {
                           />
                         </Form.Group>
                       </Col>
-                      {previewLetter?.letter_type === 'experience' ? (
+                      {previewLetter?.letter_type === 'experience' || previewLetter?.letter_type === 'training' ? (
                         <Col md={6}>
                           <Form.Group>
-                            <Form.Label className="small fw-semibold">Relieving / End Date</Form.Label>
+                            <Form.Label className="small fw-semibold">{previewLetter?.letter_type === 'training' ? 'Completion / End Date *' : 'Relieving / End Date'}</Form.Label>
                             <Form.Control 
                               size="sm"
                               type="date" 

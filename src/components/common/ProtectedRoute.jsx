@@ -30,6 +30,13 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     return <Navigate to="/login" replace />;
   }
 
+  // Instant revocation check: Inactive or terminated users cannot access ANY panel routes
+  if (user && user.status && user.status !== 'active') {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    return <Navigate to="/login?revoked=true" replace />;
+  }
+
   // Check if user role is allowed for this route
   const userRole = user.role || 'employee';
   

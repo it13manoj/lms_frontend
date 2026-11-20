@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Form, Button, Container, Row, Col, Card, Alert, Spinner } from 'react-bootstrap';
 import { useAuth } from '../../context/AuthContext';
 import './Login.css';
@@ -13,6 +13,9 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const isRevoked = searchParams.get('revoked') === 'true' || searchParams.get('reason') === 'deactivated';
 
   const handleChange = (e) => {
     setFormData({
@@ -75,6 +78,12 @@ const Login = () => {
                   </div>
                   <p className="text-muted">Leave Management System</p>
                 </div>
+
+                {isRevoked && (
+                  <Alert variant="danger" className="login-alert">
+                    <strong>Access Revoked:</strong> Your account has been deactivated or terminated by the administrator. All panel and workspace access has been removed.
+                  </Alert>
+                )}
 
                 {error && (
                   <Alert variant="danger" className="login-alert" onClose={() => setError('')} dismissible>

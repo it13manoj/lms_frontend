@@ -141,8 +141,8 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         { 
           path: '/letters', 
           icon: <FaFileAlt />, 
-          label: 'Offer & Joining Letters',
-          allowedRoles: ['admin']
+          label: 'Offer, Joining & Training Letters',
+          allowedRoles: ['admin', 'hr']
         }
       ],
       hr: [

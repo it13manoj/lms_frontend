@@ -94,8 +94,18 @@ const EmployeeProfile = () => {
                 {employee.first_name} {employee.last_name}
               </h4>
               <p className="text-muted">{employee.position || 'No position'}</p>
-              <Badge bg={employee.User?.status === 'active' ? 'success' : 'danger'}>
-                {employee.User?.status || 'inactive'}
+              <Badge 
+                bg={
+                  employee.User?.status === 'active' 
+                    ? 'success' 
+                    : (employee.User?.status === 'terminated' ? 'danger' : 'warning')
+                }
+                text={employee.User?.status === 'inactive' ? 'dark' : undefined}
+                className="px-2 py-1"
+              >
+                {employee.User?.status === 'active' 
+                  ? 'Active Account' 
+                  : (employee.User?.status === 'terminated' ? 'Terminated (Access Blocked)' : 'Inactive (Access Suspended)')}
               </Badge>
               <hr />
               <ListGroup variant="flush" className="text-start">
