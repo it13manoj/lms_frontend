@@ -913,18 +913,18 @@ export default function LetterList({ defaultType = 'all' }) {
             </div>
           ) : (
             <div className="table-responsive">
-              <Table hover className="align-middle mb-0">
+              <Table hover className="align-middle mb-0 text-nowrap">
                 <thead className="table-light">
                   <tr className="small text-uppercase text-secondary">
-                    <th>Ref No</th>
-                    <th>Candidate / Employee</th>
-                    <th>Position / Dept</th>
-                    <th>Letter Type</th>
-                    <th>Stamp &amp; Signature</th>
-                    <th>Joining Date</th>
-                    <th>Compensation (CTC)</th>
-                    <th>Issued Date</th>
-                    <th className="text-end">Actions</th>
+                    <th style={{ minWidth: '130px' }}>Ref No</th>
+                    <th style={{ minWidth: '160px' }}>Candidate / Employee</th>
+                    <th style={{ minWidth: '140px' }}>Position / Dept</th>
+                    <th style={{ minWidth: '150px' }}>Letter Type</th>
+                    <th style={{ minWidth: '140px' }}>Stamp &amp; Signature</th>
+                    <th style={{ minWidth: '100px' }}>Joining Date</th>
+                    <th style={{ minWidth: '110px' }}>Compensation (CTC)</th>
+                    <th style={{ minWidth: '100px' }}>Issued Date</th>
+                    <th className="text-end" style={{ minWidth: '180px', width: '180px' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -987,7 +987,7 @@ export default function LetterList({ defaultType = 'all' }) {
                           {letter.issue_date}
                         </td>
                         <td className="text-end">
-                          <div className="d-flex justify-content-end gap-1">
+                          <div className="d-flex justify-content-end gap-1 flex-nowrap">
                             {/* Quick Authorize / Revoke Action */}
                             {isSigned ? (
                               <Button 
@@ -997,7 +997,7 @@ export default function LetterList({ defaultType = 'all' }) {
                                 className="p-1 px-2"
                                 onClick={() => handleRevokeAuth(letter)}
                               >
-                                <FaLock size={12} className="text-warning" />
+                                <FaLock size={13} className="text-warning" />
                               </Button>
                             ) : (
                               <Button 
@@ -1007,34 +1007,33 @@ export default function LetterList({ defaultType = 'all' }) {
                                 className="p-1 px-2"
                                 onClick={() => handleOpenAuthModal(letter)}
                               >
-                                <FaKey size={12} className="text-success" />
+                                <FaKey size={13} className="text-success" />
                               </Button>
                             )}
 
-                            {/* View & Edit Details in Split Live Preview */}
+                            {/* View Letter Action - Clean Eye Icon Button */}
                             <Button 
                               variant="outline-primary" 
                               size="sm" 
-                              title="Complete Letter Editor & Live Preview"
-                              className="p-1 px-2 d-flex align-items-center gap-1"
+                              title="View & Preview Letter"
+                              className="p-1 px-2"
                               onClick={() => handleOpenPreview(letter, 'split')}
                             >
-                              <FaEye size={12} />
-                              <span>View &amp; Edit</span>
+                              <FaEye size={13} />
                             </Button>
 
                             {/* Quick Export Image / PDF */}
                             <Button 
                               variant="outline-success" 
                               size="sm" 
-                              title="Quick View & Export (Secure Image / PDF)"
-                              className="p-1 px-2 d-flex align-items-center gap-1"
+                              title="Export Secure Image (PNG/JPG) or PDF"
+                              className="p-1 px-2"
                               onClick={() => handleOpenPreview(letter, 'preview')}
                             >
-                              <FaFileImage size={12} />
-                              <span className="d-none d-lg-inline">Export</span>
+                              <FaFileImage size={13} />
                             </Button>
                             
+                            {/* Edit Letter Details */}
                             <Button 
                               variant="outline-secondary" 
                               size="sm" 
@@ -1042,16 +1041,18 @@ export default function LetterList({ defaultType = 'all' }) {
                               className="p-1 px-2"
                               onClick={() => handleOpenEditModal(letter)}
                             >
-                              <FaEdit size={12} />
+                              <FaEdit size={13} />
                             </Button>
+
+                            {/* Delete Letter */}
                             <Button 
                               variant="outline-danger" 
                               size="sm" 
-                              title="Delete"
+                              title="Delete Letter"
                               className="p-1 px-2"
                               onClick={() => handleDeleteLetter(letter.id, letter.reference_no)}
                             >
-                              <FaTrash size={12} />
+                              <FaTrash size={13} />
                             </Button>
                           </div>
                         </td>
