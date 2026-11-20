@@ -2,6 +2,7 @@ import React from 'react';
 import companyLogo from '../../assets/parakshtech_logo.jpg';
 import signatureImg from '../../assets/signature.png';
 import stampImg from '../../assets/stamp.png';
+import trainingBadgeImg from '../../assets/training_badge.png';
 
 const formatDisplayDate = (dStr) => {
   if (!dStr) return '01 February 2026';
@@ -126,11 +127,11 @@ export default function TrainingCertificate({ data = {} }) {
           <div style={styles.footer}>
             <div style={styles.leftCol}>
               <div style={styles.verificationBadge}>
-                <span style={styles.badgeIcon}>★</span>
-                <span style={styles.badgeTextCol}>
-                  <strong style={styles.badgeTitle}>Verified Industrial Training</strong>
-                  <span style={styles.badgeSubtitle}>ParakshTech LLP HR &amp; Academics</span>
-                </span>
+                <img
+                  src={trainingBadgeImg}
+                  alt="Verified Industrial Training - ParakshTech LLP HR & Academics"
+                  style={styles.verificationBadgeImg}
+                />
               </div>
               <div style={styles.verificationNote}>
                 Authenticity may be confirmed via LMS Portal. Ref: {referenceNo}
@@ -394,43 +395,12 @@ const styles = {
     textAlign: 'left'
   },
   verificationBadge: {
-    display: 'inline-block',
-    padding: '6px 12px',
-    background: '#ebf8ff',
-    border: '1px solid #bee3f8',
-    borderRadius: '6px',
-    textAlign: 'left',
-    whiteSpace: 'nowrap'
+    display: 'inline-block'
   },
-  badgeIcon: {
-    fontSize: '22px',
-    color: '#2b6cb0',
-    display: 'inline-block',
-    verticalAlign: 'middle',
-    lineHeight: 1,
-    marginRight: '8px'
-  },
-  badgeTextCol: {
-    display: 'inline-block',
-    verticalAlign: 'middle',
-    textAlign: 'left'
-  },
-  badgeTitle: {
-    display: 'block',
-    fontSize: '11px',
-    fontWeight: 'bold',
-    color: '#2b6cb0',
-    lineHeight: '14px',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-  },
-  badgeSubtitle: {
-    display: 'block',
-    fontSize: '10px',
-    fontWeight: 'normal',
-    color: '#4a5568',
-    lineHeight: '13px',
-    marginTop: '2px',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+  verificationBadgeImg: {
+    width: '235px',
+    height: 'auto',
+    display: 'block'
   },
   verificationNote: {
     fontSize: '9px',
