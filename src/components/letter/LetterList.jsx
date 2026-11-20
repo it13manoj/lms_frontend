@@ -545,7 +545,14 @@ export default function LetterList({ defaultType = 'all' }) {
         logging: false,
         scrollX: 0,
         scrollY: 0,
-        imageTimeout: 15000
+        imageTimeout: 15000,
+        onclone: (clonedDoc) => {
+          const clonedZoom = clonedDoc.querySelector('.letter-zoom-viewport');
+          if (clonedZoom) {
+            clonedZoom.style.transform = 'none';
+            clonedZoom.style.marginBottom = '0px';
+          }
+        }
       });
 
       // Restore zoom container styles

@@ -126,19 +126,11 @@ export default function TrainingCertificate({ data = {} }) {
           <div style={styles.footer}>
             <div style={styles.leftCol}>
               <div style={styles.verificationBadge}>
-                <table style={styles.badgeTable}>
-                  <tbody>
-                    <tr>
-                      <td style={styles.badgeIconCell}>
-                        <span style={styles.badgeIcon}>★</span>
-                      </td>
-                      <td style={styles.badgeTextCell}>
-                        <div style={styles.badgeTitle}>Verified Industrial Training</div>
-                        <div style={styles.badgeSubtitle}>ParakshTech LLP HR &amp; Academics</div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                <span style={styles.badgeIcon}>★</span>
+                <span style={styles.badgeTextCol}>
+                  <strong style={styles.badgeTitle}>Verified Industrial Training</strong>
+                  <span style={styles.badgeSubtitle}>ParakshTech LLP HR &amp; Academics</span>
+                </span>
               </div>
               <div style={styles.verificationNote}>
                 Authenticity may be confirmed via LMS Portal. Ref: {referenceNo}
@@ -406,44 +398,39 @@ const styles = {
     padding: '6px 12px',
     background: '#ebf8ff',
     border: '1px solid #bee3f8',
-    borderRadius: '6px'
-  },
-  badgeTable: {
-    borderCollapse: 'collapse',
-    border: 'none',
-    background: 'transparent',
-    margin: 0,
-    padding: 0
-  },
-  badgeIconCell: {
-    verticalAlign: 'middle',
-    paddingRight: '8px',
-    border: 'none',
-    lineHeight: 1
-  },
-  badgeTextCell: {
-    verticalAlign: 'middle',
+    borderRadius: '6px',
     textAlign: 'left',
-    border: 'none',
-    lineHeight: 1.2
+    whiteSpace: 'nowrap'
   },
   badgeIcon: {
-    fontSize: '18px',
+    fontSize: '22px',
     color: '#2b6cb0',
     display: 'inline-block',
-    lineHeight: 1
+    verticalAlign: 'middle',
+    lineHeight: 1,
+    marginRight: '8px'
+  },
+  badgeTextCol: {
+    display: 'inline-block',
+    verticalAlign: 'middle',
+    textAlign: 'left'
   },
   badgeTitle: {
+    display: 'block',
     fontSize: '11px',
-    fontWeight: '700',
+    fontWeight: 'bold',
     color: '#2b6cb0',
-    lineHeight: 1.2
+    lineHeight: '14px',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
   },
   badgeSubtitle: {
-    fontSize: '9.5px',
+    display: 'block',
+    fontSize: '10px',
+    fontWeight: 'normal',
     color: '#4a5568',
-    lineHeight: 1.2,
-    marginTop: '2px'
+    lineHeight: '13px',
+    marginTop: '2px',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
   },
   verificationNote: {
     fontSize: '9px',
