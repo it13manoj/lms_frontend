@@ -380,17 +380,20 @@ const EmployeeList = () => {
                                 </Button>
                               )
                             )}
-                            <Button 
-                              variant="outline-danger" 
-                              size="sm"
-                              onClick={() => {
-                                setSelectedEmployee(employee);
-                                setShowDeleteModal(true);
-                              }}
-                              title="Delete Employee"
-                            >
-                              <FaTrash />
-                            </Button>
+                            {/* Delete Employee - Non-admin accounts only */}
+                            {employee.User?.role !== 'admin' && (
+                              <Button 
+                                variant="outline-danger" 
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedEmployee(employee);
+                                  setShowDeleteModal(true);
+                                }}
+                                title="Delete Employee"
+                              >
+                                <FaTrash />
+                              </Button>
+                            )}
                           </>
                         )}
                       </div>
